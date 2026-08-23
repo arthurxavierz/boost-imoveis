@@ -179,7 +179,24 @@ create policy "condominios - gerenciar" on condominios
 -- ------------------------------------------------------------
 -- 4. VIEWS DA VITRINE
 -- ------------------------------------------------------------
-create or replace view vitrine_imoveis
+-- A view ja existe desde a 0003, e aqui ela ganha tres colunas no meio
+-- da lista: hectares entre area_total e quartos, e o trio de condominio
+-- depois de caracteristicas.
+--
+-- `create or replace view` nao da conta disso. O Postgres so aceita
+-- acrescentar coluna no FIM de uma view existente; inserir no meio ele
+-- le como renomear a coluna daquela posicao, e recusa com
+--
+--   ERROR 42P16: cannot change name of view column "quartos" to "hectares"
+--
+-- Derrubar e recriar resolve. E seguro aqui porque nenhuma outra view
+-- depende desta, e facetas_vitrine() e criada depois, mais abaixo neste
+-- mesmo arquivo. As colunas ficam agrupadas por assunto de proposito:
+-- ler a view deve dizer o que a vitrine mostra, e uma coluna jogada no
+-- fim so para agradar o motor esconderia isso.
+drop view if exists vitrine_imoveis;
+
+create view vitrine_imoveis
 with (security_invoker = true)
 as
   select
@@ -205,7 +222,9 @@ grant select on vitrine_imoveis to anon, authenticated;
 
 -- Condominio com a contagem e a faixa de preco das unidades disponiveis.
 -- Uma view resolve o que na aplicacao seria uma consulta por cartao.
-create or replace view vitrine_condominios
+drop view if exists vitrine_condominios;
+
+create view vitrine_condominios
 with (security_invoker = true)
 as
   select

@@ -95,7 +95,12 @@ create index if not exists idx_proprietarios_documento
 -- o de quem a criou. Sem isso, a view seria um buraco no RLS de
 -- proprietarios: um corretor leria por ela a carteira inteira da casa,
 -- que e exatamente o que a politica da 0003 impede na tabela.
-create or replace view proprietarios_com_carteira
+-- Derrubada antes de criar pelo mesmo motivo da 0009: `create or
+-- replace view` recusa mudanca na lista de colunas, e o `p.*` daqui
+-- muda sozinho toda vez que a tabela proprietarios ganhar um campo.
+drop view if exists proprietarios_com_carteira;
+
+create view proprietarios_com_carteira
 with (security_invoker = true)
 as
 select
