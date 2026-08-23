@@ -15,21 +15,30 @@
 #   NEXT_PUBLIC_SITE_URL
 # ============================================================
 
-# ATENCAO ao campo "Publish directory" da interface do Netlify.
+# A pasta de publicacao e declarada aqui, e o campo "Publish directory"
+# da interface do Netlify deve ficar VAZIO.
 #
-# Este arquivo NAO declara pasta de publicacao de proposito: o runtime
-# de Next.js do Netlify detecta sozinho. Mas se o campo estiver
-# preenchido na interface, ele VENCE o que esta aqui — o log mostra
-# `publishOrigin: ui` — e o build falha com
+# Sao dois erros diferentes, e ja passamos pelos dois:
 #
-#   Your publish directory does not contain expected Next.js build output
+#   Campo preenchido com a pasta errada ->
+#     "Your publish directory does not contain expected Next.js build
+#      output". O valor da interface vence o deste arquivo
+#      (`publishOrigin: ui` no log), entao o build compila certo e o
+#      plugin procura o resultado no lugar errado.
 #
-# mesmo tendo compilado tudo certo. Acontece quando o site foi criado
-# antes de configurar o Package directory: o Netlify adivinhou uma pasta
-# e deixou o palpite gravado na interface. Apague o campo e deixe vazio.
+#   Campo vazio E sem declaracao aqui ->
+#     "Your publish directory cannot be the same as the base directory".
+#     Sem ninguem dizer onde e, o Netlify assume a propria pasta do
+#     pacote, que e igual a base, e o plugin recusa.
+#
+# Com `publish` declarado abaixo e o campo da interface vazio, o log
+# passa a mostrar `publishOrigin: config` e o caminho certo.
 
 [build]
   command = "npm run build:app"
+  # Relativo a esta pasta: o Netlify resolve com baseRelDir, entao isto
+  # vira /opt/build/repo/apps/app/.next
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
