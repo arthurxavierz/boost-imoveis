@@ -3,6 +3,7 @@
 # ============================================================
 # No painel do Netlify, configure este site assim:
 #   Base directory     -> deixe VAZIO
+#   Publish directory  -> deixe VAZIO tambem
 #   Package directory  -> apps/app
 #
 # Mesma razao do site publico: o npm install precisa rodar na raiz do
@@ -14,11 +15,24 @@
 #   NEXT_PUBLIC_SITE_URL
 # ============================================================
 
+# ATENCAO ao campo "Publish directory" da interface do Netlify.
+#
+# Este arquivo NAO declara pasta de publicacao de proposito: o runtime
+# de Next.js do Netlify detecta sozinho. Mas se o campo estiver
+# preenchido na interface, ele VENCE o que esta aqui — o log mostra
+# `publishOrigin: ui` — e o build falha com
+#
+#   Your publish directory does not contain expected Next.js build output
+#
+# mesmo tendo compilado tudo certo. Acontece quando o site foi criado
+# antes de configurar o Package directory: o Netlify adivinhou uma pasta
+# e deixou o palpite gravado na interface. Apague o campo e deixe vazio.
+
 [build]
   command = "npm run build:app"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
   # O build do Next com os pacotes do monorepo passa do heap padrao
   # do Node em maquinas menores. Reservar 4 GB evita a falha
   # intermitente de alocacao durante a compilacao.
