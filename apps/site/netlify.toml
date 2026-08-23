@@ -33,14 +33,21 @@
 #     Sem ninguem dizer onde e, o Netlify assume a propria pasta do
 #     pacote, que e igual a base, e o plugin recusa.
 #
+#   Declarado como ".next" ->
+#     "Your publish directory was not found at /opt/build/repo/.next".
+#     O caminho e resolvido a partir da RAIZ do repositorio, nao desta
+#     pasta, mesmo com baseRelDir ligado nos flags do build.
+#
 # Com `publish` declarado abaixo e o campo da interface vazio, o log
 # passa a mostrar `publishOrigin: config` e o caminho certo.
 
 [build]
   command = "npm run build:site"
-  # Relativo a esta pasta: o Netlify resolve com baseRelDir, entao isto
-  # vira /opt/build/repo/apps/site/.next
-  publish = ".next"
+  # Caminho a partir da RAIZ do repositorio, e nao desta pasta.
+  # `publish = ".next"` resolveu para /opt/build/repo/.next e o plugin
+  # nao achou nada la, apesar do baseRelDir. O caminho completo e o
+  # unico que funciona com packagePath.
+  publish = "apps/site/.next"
 
 [build.environment]
   NODE_VERSION = "22"
