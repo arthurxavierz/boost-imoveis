@@ -104,6 +104,22 @@ alter table imoveis
   -- e a vitrine cai de volta para o metro quadrado util.
   add column if not exists hectares        numeric(12,4);
 
+-- As quatro colunas acima precisam entrar no grant do visitante.
+--
+-- O grant da 0003 e por COLUNA, nao por tabela: o anon recebe select
+-- numa lista explicita de imoveis, e matricula, proprietario_id e
+-- observacoes_internas ficam de fora. E defesa em profundidade, e vale
+-- a pena. O preco e este: toda coluna nova que a vitrine mostrar
+-- precisa ser somada aqui.
+--
+-- Sem isso, vitrine_imoveis quebra inteira para quem nao esta logado,
+-- com 42501 — porque a view usa security_invoker e o Postgres vai
+-- conferir a permissao do chamador nas colunas da tabela de baixo. E
+-- uma falha que so aparece deslogado: no painel, com sessao, tudo
+-- funciona e ninguem percebe.
+grant select (hectares, condominio_id, condominio_nome, referencia_externa)
+  on imoveis to anon;
+
 create unique index if not exists idx_imovel_referencia
   on imoveis (referencia_externa) where referencia_externa is not null;
 
