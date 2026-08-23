@@ -599,21 +599,28 @@ const RASCUNHOS: RascunhoImovel[] = [
  * inventario, a construtora tem procurador, e a pessoa fisica assina
  * sozinha. Quem for desenhar a tela de captacao precisa ver os tres.
  */
+/*
+ * Os documentos abaixo sao propositalmente invalidos: dígito repetido
+ * (111.111.111-11 e afins) e recusado por qualquer validador de CPF e
+ * CNPJ. Como este repositorio e publico, um documento com aparencia
+ * plausivel poderia coincidir com o de uma pessoa real. Assim nao ha
+ * duvida de que sao dados de demonstracao.
+ */
 const PROPRIETARIOS: Proprietario[] = [
-  ['Helena Machado', '341.552.880-04', 'helena.machado@email.com', '34999330001', 'Rua Coronel Antônio Alves, 820 - Osvaldo Rezende, Uberlândia - MG', 'Mora em Ribeirão Preto. Prefere tratar por WhatsApp, e só depois das 18h.'],
-  ['Ricardo e Sônia Vasconcelos', '228.914.706-72', 'rvasconcelos@email.com', '34999330002', 'Alameda das Acácias, 145 - Jardim Karaíba, Uberlândia - MG', 'Casal. Qualquer proposta precisa do aceite dos dois por escrito.'],
-  ['Espólio Marileusa Participações', '18.442.903/0001-55', 'inventario@marileusaparticipacoes.com.br', '34999330003', 'Av. Floriano Peixoto, 2100 - Centro, Uberlândia - MG', 'Venda depende de alvará judicial. Inventariante: Dra. Regina Portilho, OAB-MG 88.402.'],
-  ['Antônio Bernardes', '105.773.618-90', 'antonio.bernardes@email.com', '34999330004', 'Rua Rio de Janeiro, 55 - Santa Mônica, Uberlândia - MG', 'Aceita proposta a partir de 1,85 milhão. Não divulgar o piso.'],
-  ['Cláudia Ferreira', '470.226.351-08', 'claudia.ferreira@email.com', '34999330005', 'Rua Vigilato Pereira, 1180 - Lídice, Uberlândia - MG', 'Aceita permuta por imóvel menor na região central.'],
-  ['WTC Uberlândia', '24.907.115/0001-31', 'locacao@wtcuberlandia.com.br', '3432220100', 'Av. Rondon Pacheco, 4600 - Tibery, Uberlândia - MG', 'Pessoa jurídica. Contato pelo departamento comercial, nunca direto com a diretoria.'],
-  ['Galassi Empreendimentos', '09.331.874/0001-20', 'comercial@galassi.com.br', '3432220200', 'Av. João Naves de Ávila, 1331 - Tibery, Uberlândia - MG', 'Construtora. Repassa unidades em lote, com tabela própria de comissão.'],
-  ['Construtora Umuarama', '31.556.208/0001-77', 'vendas@construtoraumuarama.com.br', '3432220300', 'Rua Arthur Bernardes, 900 - Umuarama, Uberlândia - MG', null],
-  ['Marta Siqueira', '812.330.947-15', 'marta.siqueira@email.com', '34999330006', 'Rua Bernardo Guimarães, 300 - Tibery, Uberlândia - MG', 'Viúva, documentação em nome dela desde 2021. Escritura em mãos.'],
-  ['Paulo Henrique Drumond', '659.104.228-63', 'ph.drumond@email.com', '34999330007', 'Rua das Palmeiras, 77 - Novo Mundo, Uberlândia - MG', 'Investidor. Tem outros três imóveis para colocar à venda ainda este ano.'],
-  ['Imobiliária São Jorge Participações', '11.208.663/0001-04', 'contato@saojorgepart.com.br', '3432220400', 'Av. Cesário Alvim, 1200 - Centro, Uberlândia - MG', 'Parceria de repasse. Comissão dividida meio a meio.'],
-  ['Lucas Andrade Ferraz', '733.891.024-56', 'lucas.ferraz@email.com', '34999330008', 'Rua Goiás, 410 - Martins, Uberlândia - MG', null],
-  ['Terezinha Alves de Melo', '284.667.130-49', null, '34999330009', 'Rua Ipiranga, 88 - Brasil, Uberlândia - MG', 'Não usa e-mail. Todo contato por telefone fixo, em horário comercial.'],
-  ['Grupo Cedro Empreendimentos', '27.884.510/0001-96', 'novos.negocios@grupocedro.com.br', '3432220500', 'Av. Anselmo Alves dos Santos, 3500 - Santa Mônica, Uberlândia - MG', null],
+  ['Helena Machado', '222.222.222-22', 'helena.machado@email.com', '34999330001', 'Rua Coronel Antônio Alves, 820 - Osvaldo Rezende, Uberlândia - MG', 'Mora em Ribeirão Preto. Prefere tratar por WhatsApp, e só depois das 18h.'],
+  ['Ricardo e Sônia Vasconcelos', '333.333.333-33', 'rvasconcelos@email.com', '34999330002', 'Alameda das Acácias, 145 - Jardim Karaíba, Uberlândia - MG', 'Casal. Qualquer proposta precisa do aceite dos dois por escrito.'],
+  ['Espólio Marileusa Participações', '22.222.222/0001-22', 'inventario@marileusaparticipacoes.com.br', '34999330003', 'Av. Floriano Peixoto, 2100 - Centro, Uberlândia - MG', 'Venda depende de alvará judicial. Inventariante: Dra. Regina Portilho, OAB-MG 88.402.'],
+  ['Antônio Bernardes', '444.444.444-44', 'antonio.bernardes@email.com', '34999330004', 'Rua Rio de Janeiro, 55 - Santa Mônica, Uberlândia - MG', 'Aceita proposta a partir de 1,85 milhão. Não divulgar o piso.'],
+  ['Cláudia Ferreira', '555.555.555-55', 'claudia.ferreira@email.com', '34999330005', 'Rua Vigilato Pereira, 1180 - Lídice, Uberlândia - MG', 'Aceita permuta por imóvel menor na região central.'],
+  ['WTC Uberlândia', '33.333.333/0001-33', 'locacao@wtcuberlandia.com.br', '3432220100', 'Av. Rondon Pacheco, 4600 - Tibery, Uberlândia - MG', 'Pessoa jurídica. Contato pelo departamento comercial, nunca direto com a diretoria.'],
+  ['Galassi Empreendimentos', '44.444.444/0001-44', 'comercial@galassi.com.br', '3432220200', 'Av. João Naves de Ávila, 1331 - Tibery, Uberlândia - MG', 'Construtora. Repassa unidades em lote, com tabela própria de comissão.'],
+  ['Construtora Umuarama', '55.555.555/0001-55', 'vendas@construtoraumuarama.com.br', '3432220300', 'Rua Arthur Bernardes, 900 - Umuarama, Uberlândia - MG', null],
+  ['Marta Siqueira', '666.666.666-66', 'marta.siqueira@email.com', '34999330006', 'Rua Bernardo Guimarães, 300 - Tibery, Uberlândia - MG', 'Viúva, documentação em nome dela desde 2021. Escritura em mãos.'],
+  ['Paulo Henrique Drumond', '777.777.777-77', 'ph.drumond@email.com', '34999330007', 'Rua das Palmeiras, 77 - Novo Mundo, Uberlândia - MG', 'Investidor. Tem outros três imóveis para colocar à venda ainda este ano.'],
+  ['Imobiliária São Jorge Participações', '66.666.666/0001-66', 'contato@saojorgepart.com.br', '3432220400', 'Av. Cesário Alvim, 1200 - Centro, Uberlândia - MG', 'Parceria de repasse. Comissão dividida meio a meio.'],
+  ['Lucas Andrade Ferraz', '888.888.888-88', 'lucas.ferraz@email.com', '34999330008', 'Rua Goiás, 410 - Martins, Uberlândia - MG', null],
+  ['Terezinha Alves de Melo', '999.999.999-99', null, '34999330009', 'Rua Ipiranga, 88 - Brasil, Uberlândia - MG', 'Não usa e-mail. Todo contato por telefone fixo, em horário comercial.'],
+  ['Grupo Cedro Empreendimentos', '77.777.777/0001-77', 'novos.negocios@grupocedro.com.br', '3432220500', 'Av. Anselmo Alves dos Santos, 3500 - Santa Mônica, Uberlândia - MG', null],
 ].map(([nome, cpf_cnpj, email, telefone, endereco, observacoes], i) => ({
   id: idFalso('44444444', i + 1),
   nome: nome as string,
@@ -1638,7 +1645,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Patrícia Coelho',
     telefone: '34999330001',
-    email: 'patricia.coelho@gmail.com',
+    email: 'patricia.coelho@example.com',
     etapa: 'novo',
     origem: 'site',
     imovel: 0,
@@ -1650,7 +1657,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Anderson Lima',
     telefone: '34999330002',
-    email: 'anderson.lima@outlook.com',
+    email: 'anderson.lima@example.com',
     etapa: 'novo',
     origem: 'whatsapp',
     imovel: 1,
@@ -1662,7 +1669,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Sandra Oliveira',
     telefone: '34999330003',
-    email: 'sandra.oliveira@hotmail.com',
+    email: 'sandra.oliveira@example.com',
     etapa: 'novo',
     origem: 'indicacao',
     imovel: null,
@@ -1688,7 +1695,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Letícia Barbosa',
     telefone: '34999330005',
-    email: 'leticia.barbosa92@gmail.com',
+    email: 'leticia.barbosa92@example.com',
     etapa: 'contato',
     origem: 'portal',
     imovel: 4,
@@ -1700,7 +1707,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Eduardo Ramos',
     telefone: '34999330006',
-    email: 'eduardo.ramos@uol.com.br',
+    email: 'eduardo.ramos@example.com',
     etapa: 'visita',
     origem: 'site',
     imovel: 3,
@@ -1713,7 +1720,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Mariana Castro',
     telefone: '34999330007',
-    email: 'mari.castro@gmail.com',
+    email: 'mari.castro@example.com',
     etapa: 'visita',
     origem: 'instagram',
     imovel: 8,
@@ -1737,7 +1744,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Juliana Rezende',
     telefone: '34999330009',
-    email: 'juliana.rezende@gmail.com',
+    email: 'juliana.rezende@example.com',
     etapa: 'proposta',
     origem: 'site',
     imovel: 3,
@@ -1749,7 +1756,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Fernando e Beatriz Almeida',
     telefone: '34999330010',
-    email: 'fernando.almeida@terra.com.br',
+    email: 'fernando.almeida@example.com',
     etapa: 'fechado',
     origem: 'portal',
     imovel: 2,
@@ -1773,7 +1780,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Renata e Paulo Andrade',
     telefone: '34999330012',
-    email: 'renata.andrade@gmail.com',
+    email: 'renata.andrade@example.com',
     etapa: 'fechado',
     origem: 'vitrine',
     imovel: 4,
@@ -1784,8 +1791,8 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   },
   {
     nome: 'Vanessa Custódio',
-    telefone: '34984107907',
-    email: 'varcustodio@live.com',
+    telefone: '34999000001',
+    email: 'varcustodio@example.com',
     etapa: 'contato',
     origem: 'presencial',
     imovel: 7,
@@ -1797,7 +1804,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   },
   {
     nome: 'Cristiano Balbino',
-    telefone: '34988189939',
+    telefone: '34999000002',
     email: null,
     etapa: 'novo',
     origem: 'telefone',
@@ -1809,8 +1816,8 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   },
   {
     nome: 'Simone Firmo',
-    telefone: '34991424796',
-    email: 'simone.firmo@gmail.com',
+    telefone: '34999000003',
+    email: 'simone.firmo@example.com',
     etapa: 'visita',
     origem: 'manual',
     imovel: 9,
@@ -1822,7 +1829,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Otávio Mendonça',
     telefone: '34999330014',
-    email: 'otavio.mendonca@gmail.com',
+    email: 'otavio.mendonca@example.com',
     etapa: 'perdido',
     origem: 'site',
     imovel: 1,
@@ -1835,7 +1842,7 @@ const RASCUNHOS_LEAD: RascunhoLead[] = [
   {
     nome: 'Beatriz Nogueira',
     telefone: '34999330015',
-    email: 'bia.nogueira@hotmail.com',
+    email: 'bia.nogueira@example.com',
     etapa: 'perdido',
     origem: 'whatsapp',
     imovel: 8,
