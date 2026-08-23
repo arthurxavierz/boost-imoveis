@@ -1,0 +1,36 @@
+# ============================================================
+# CONFIGURACAO DO NETLIFY
+# ============================================================
+
+[build]
+  # Comando que o Netlify roda ao publicar
+  command = "npm run build"
+  # Pasta que o Netlify serve para o mundo
+  publish = "dist"
+  # Onde ficam as funcoes server-side
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Deixa as funcoes acessiveis por um caminho curto e limpo.
+# Exemplo: https://seusite.com.br/api/ai-assistant
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Como este e um site de uma pagina so, qualquer rota cai no index.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Cabecalhos de seguranca aplicados a todas as paginas.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"

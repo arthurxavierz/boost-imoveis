@@ -1,0 +1,36 @@
+# ============================================================
+# SISTEMA DE GESTAO - app.boostimoveis.com.br
+# ============================================================
+# No painel do Netlify, configure este site assim:
+#   Base directory     -> deixe VAZIO
+#   Package directory  -> apps/app
+#
+# Mesma razao do site publico: o npm install precisa rodar na raiz do
+# repositorio para enxergar os workspaces @boost/core e @boost/db.
+#
+# Variaveis obrigatorias neste site:
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   NEXT_PUBLIC_SITE_URL
+# ============================================================
+
+[build]
+  command = "npm run build:app"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # O build do Next com os pacotes do monorepo passa do heap padrao
+  # do Node em maquinas menores. Reservar 4 GB evita a falha
+  # intermitente de alocacao durante a compilacao.
+  NODE_OPTIONS = "--max-old-space-size=4096"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # Sistema interno nao entra em indice de buscador.
+    X-Robots-Tag = "noindex, nofollow"
+    # Painel com dado de cliente nunca deve ficar em cache de CDN.
+    Cache-Control = "no-store, max-age=0"

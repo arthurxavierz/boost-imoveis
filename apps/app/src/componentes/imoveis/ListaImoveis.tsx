@@ -1,0 +1,734 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useCallback, useMemo, useState, useTransition } from 'react';
+
+import {
+  area as fmtArea,
+  brl,
+  brlCurto,
+  contarFiltrosCarteira,
+  data as fmtData,
+  FAIXAS_CARTEIRA,
+  filtrarCarteira,
+  FILTRO_CARTEIRA_VAZIO,
+  podeGerenciarImovel,
+  STATUS_IMOVEL,
+  TIPOS_IMOVEL,
+  type FiltroCarteira,
+  type Imovel,
+  type Perfil,
+  type Proprietario,
+} from '@boost/core';
+
+import { CabecalhoPagina } from '@/componentes/CabecalhoPagina';
+import { Recado } from '@/componentes/Recado';
+import {
+  IconeAlerta,
+  IconeBusca,
+  IconeFiltro,
+  IconeMais,
+  IconeVazio,
+} from '@/componentes/Icones';
+import {
+  alternarDestaque,
+  alternarPublicacao,
+  atribuirCorretor,
+  mudarStatusImovel,
+} from '@/app/(painel)/imoveis/acoes';
+import { GavetaImovel } from './GavetaImovel';
+
+const ESTILO_SELECT_CELULA: React.CSSProperties = {
+  minHeight: 34,
+  padding: '5px 28px 5px 10px',
+  fontSize: '0.82rem',
+  border: '1px solid var(--linha-forte)',
+  borderRadius: 'var(--raio-p)',
+  background: 'var(--branco)',
+  appearance: 'none',
+};
+
+/**
+ * Carteira de imóveis.
+ *
+ * A busca aqui não é a mesma da vitrine, e a diferença é o ponto da
+ * tela. O visitante escolhe entre o que está publicado; a equipe
+ * precisa achar o que está fora do ar, o que não tem responsável e o
+ * que ficou sem proprietário — que são justamente os registros que
+ * ninguém quer mostrar mas alguém precisa resolver.
+ *
+ * Os filtros ficam em dois níveis. Na barra, os três que resolvem a
+ * maioria das buscas. Atrás do botão, o resto: faixa de preço, bairro,
+ * proprietário, consultor, quartos, vagas. Doze campos abertos o dia
+ * inteiro custam mais atenção do que economizam, e quem precisa da
+ * busca fina sabe que ela existe depois de usar a tela uma semana.
+ *
+ * A regra de filtragem mora em @boost/core, e não neste arquivo: a
+ * exportação de XML e o relatório por consultor vão precisar do mesmo
+ * recorte, e regra de filtro duplicada é regra que diverge.
+ *
+ * A tabela vira lista de cartões abaixo de 860px pelo CSS, com o rótulo
+ * de cada campo vindo do atributo data-rotulo. É por isso que cada
+ * célula carrega esse atributo: sem ele, no celular a linha vira uma
+ * sequência de números sem significado.
+ */
+export function ListaImoveis({
+  usuario,
+  imoveis,
+  proprietarios,
+  equipe,
+  parametros,
+}: {
+  usuario: Perfil;
+  imoveis: Imovel[];
+  proprietarios: Pick<Proprietario, 'id' | 'nome'>[];
+  equipe: Perfil[];
+  parametros: { imovel?: string; proprietario?: string; 'sem-proprietario'?: string };
+}) {
+  const router = useRouter();
+  const [pendente, iniciar] = useTransition();
+
+  const [filtros, setFiltros] = useState<FiltroCarteira>({
+    ...FILTRO_CARTEIRA_VAZIO,
+    proprietario: parametros.proprietario ?? '',
+    semProprietario: parametros['sem-proprietario'] === '1',
+  });
+  const [avancadosAbertos, setAvancadosAbertos] = useState(
+    Boolean(parametros.proprietario || parametros['sem-proprietario']),
+  );
+  const [abertoId, setAbertoId] = useState<string | null>(parametros.imovel ?? null);
+  const [criandoNovo, setCriandoNovo] = useState(false);
+  const [recado, setRecado] = useState<{ texto: string; erro?: boolean } | null>(null);
+
+  const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+
+  const porPessoa = useMemo(() => new Map(equipe.map((p) => [p.id, p.nome])), [equipe]);
+  const porProprietario = useMemo(
+    () => new Map(proprietarios.map((p) => [p.id, p.nome])),
+    [proprietarios],
+  );
+
+  /** Bairros que existem de fato na carteira, não uma lista fixa. */
+  const bairros = useMemo(() => {
+    const conjunto = new Set(imoveis.map((i) => i.bairro).filter(Boolean) as string[]);
+    return [...conjunto].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [imoveis]);
+
+  const cidades = useMemo(() => {
+    const conjunto = new Set(imoveis.map((i) => i.cidade).filter(Boolean));
+    return [...conjunto].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [imoveis]);
+
+  const filtrados = useMemo(
+    () => filtrarCarteira(imoveis, filtros, proprietarios),
+    [imoveis, filtros, proprietarios],
+  );
+
+  const aberto = useMemo(
+    () => (abertoId ? (imoveis.find((i) => i.id === abertoId) ?? null) : null),
+    [imoveis, abertoId],
+  );
+
+  const ativos = contarFiltrosCarteira(filtros);
+
+  const vgv = filtrados
+    .filter((i) => i.status === 'disponivel')
+    .reduce((soma, i) => soma + Number(i.valor), 0);
+
+  const semProprietario = imoveis.filter((i) => !i.proprietario_id).length;
+
+  const avisar = useCallback((texto: string, erro = false) => setRecado({ texto, erro }), []);
+
+  function executar(acao: Promise<{ ok: boolean; erro?: string; mensagem?: string }>) {
+    iniciar(async () => {
+      const r = await acao;
+      avisar(r.ok ? (r.mensagem ?? 'Atualizado.') : (r.erro ?? 'Falha.'), !r.ok);
+      router.refresh();
+    });
+  }
+
+  function mudar<C extends keyof FiltroCarteira>(campo: C, valor: FiltroCarteira[C]) {
+    setFiltros((atual) => ({ ...atual, [campo]: valor }));
+  }
+
+  /** Lê um campo de número que pode ficar vazio. Vazio é "sem limite". */
+  function mudarNumero(campo: keyof FiltroCarteira, bruto: string) {
+    const limpo = bruto.replace(/\D/g, '');
+    mudar(campo, (limpo ? Number(limpo) : null) as FiltroCarteira[typeof campo]);
+  }
+
+  function fecharGaveta() {
+    setAbertoId(null);
+    setCriandoNovo(false);
+  }
+
+  function aoConcluir(mensagem: string, erro = false) {
+    if (!erro) fecharGaveta();
+    avisar(mensagem, erro);
+    router.refresh();
+  }
+
+  return (
+    <>
+      <CabecalhoPagina titulo="Imóveis">
+        <button className="btn somente-desktop" onClick={() => setCriandoNovo(true)}>
+          <IconeMais />
+          Novo imóvel
+        </button>
+      </CabecalhoPagina>
+
+      <div className="corpo">
+        <div className="painel-resumo">
+          <ResumoRapido rotulo="Na seleção" valor={String(filtrados.length)} />
+          <ResumoRapido rotulo="VGV disponível" valor={brlCurto(vgv)} />
+          <ResumoRapido
+            rotulo="No ar"
+            valor={String(filtrados.filter((i) => i.publicado).length)}
+          />
+          <ResumoRapido
+            rotulo="Sem proprietário"
+            valor={String(semProprietario)}
+            alerta={semProprietario > 0}
+          />
+        </div>
+
+        <div className="filtros-barra">
+          <div className="busca-rapida">
+            <IconeBusca />
+            <input
+              value={filtros.termo}
+              onChange={(e) => mudar('termo', e.target.value)}
+              placeholder="Título, código, bairro, matrícula ou proprietário"
+              aria-label="Buscar imóvel"
+            />
+          </div>
+
+          <div className="campo campo-filtro">
+            <select
+              value={filtros.tipo}
+              onChange={(e) => mudar('tipo', e.target.value)}
+              aria-label="Filtrar por tipo"
+            >
+              <option value="">Todos os tipos</option>
+              {TIPOS_IMOVEL.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="campo campo-filtro">
+            <select
+              value={filtros.status}
+              onChange={(e) => mudar('status', e.target.value)}
+              aria-label="Filtrar por situação"
+            >
+              <option value="">Todas as situações</option>
+              {Object.entries(STATUS_IMOVEL).map(([chave, info]) => (
+                <option key={chave} value={chave}>
+                  {info.rotulo}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            className={avancadosAbertos ? 'btn btn-pequeno' : 'btn btn-claro btn-pequeno'}
+            onClick={() => setAvancadosAbertos((v) => !v)}
+            aria-expanded={avancadosAbertos}
+          >
+            <IconeFiltro />
+            Mais filtros
+            {ativos > 0 && <span className="contador-filtros">{ativos}</span>}
+          </button>
+
+          {ativos > 0 && (
+            <button
+              className="btn btn-fantasma btn-pequeno"
+              onClick={() => setFiltros(FILTRO_CARTEIRA_VAZIO)}
+            >
+              Limpar
+            </button>
+          )}
+
+          <span className="texto-mudo empurra somente-desktop">
+            {filtrados.length} {filtrados.length === 1 ? 'imóvel' : 'imóveis'} · {brl(vgv)} em
+            carteira disponível
+          </span>
+        </div>
+
+        {avancadosAbertos && (
+          <div className="filtros-avancados">
+            <div className="campo">
+              <label htmlFor="f-faixa">Faixa de valor</label>
+              <select
+                id="f-faixa"
+                value={
+                  FAIXAS_CARTEIRA.findIndex(
+                    (f) => f.min === filtros.valorMin && f.max === filtros.valorMax,
+                  ) === -1
+                    ? 'livre'
+                    : String(
+                        FAIXAS_CARTEIRA.findIndex(
+                          (f) => f.min === filtros.valorMin && f.max === filtros.valorMax,
+                        ),
+                      )
+                }
+                onChange={(e) => {
+                  if (e.target.value === 'livre') return;
+                  const faixa = FAIXAS_CARTEIRA[Number(e.target.value)];
+                  setFiltros((atual) => ({
+                    ...atual,
+                    valorMin: faixa.min,
+                    valorMax: faixa.max,
+                  }));
+                }}
+              >
+                {FAIXAS_CARTEIRA.map((f, i) => (
+                  <option key={f.rotulo} value={i}>
+                    {f.rotulo}
+                  </option>
+                ))}
+                <option value="livre">Valor exato (abaixo)</option>
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-min">Valor exato</label>
+              <div className="faixa-valor">
+                <input
+                  id="f-min"
+                  inputMode="numeric"
+                  placeholder="de"
+                  value={filtros.valorMin ?? ''}
+                  onChange={(e) => mudarNumero('valorMin', e.target.value)}
+                  aria-label="Valor mínimo"
+                />
+                <span>até</span>
+                <input
+                  inputMode="numeric"
+                  placeholder="1500000"
+                  value={filtros.valorMax ?? ''}
+                  onChange={(e) => mudarNumero('valorMax', e.target.value)}
+                  aria-label="Valor máximo"
+                />
+              </div>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-bairro">Bairro</label>
+              <select
+                id="f-bairro"
+                value={filtros.bairro}
+                onChange={(e) => mudar('bairro', e.target.value)}
+              >
+                <option value="">Todos os bairros</option>
+                {bairros.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-cidade">Cidade</label>
+              <select
+                id="f-cidade"
+                value={filtros.cidade}
+                onChange={(e) => mudar('cidade', e.target.value)}
+              >
+                <option value="">Todas as cidades</option>
+                {cidades.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-proprietario">Proprietário</label>
+              <select
+                id="f-proprietario"
+                value={filtros.proprietario}
+                onChange={(e) => mudar('proprietario', e.target.value)}
+              >
+                <option value="">Todos os proprietários</option>
+                {proprietarios.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-consultor">Consultor</label>
+              <select
+                id="f-consultor"
+                value={filtros.consultor}
+                onChange={(e) => mudar('consultor', e.target.value)}
+              >
+                <option value="">Todos os consultores</option>
+                <option value="sem-dono">Sem responsável</option>
+                {equipe
+                  .filter((p) => p.ativo)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}
+                      {p.id === usuario.id ? ' (você)' : ''}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-finalidade">Finalidade</label>
+              <select
+                id="f-finalidade"
+                value={filtros.finalidade}
+                onChange={(e) => mudar('finalidade', e.target.value)}
+              >
+                <option value="">Venda e locação</option>
+                <option value="venda">Somente venda</option>
+                <option value="locacao">Somente locação</option>
+                <option value="venda_locacao">Venda e locação</option>
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-vitrine">Vitrine</label>
+              <select
+                id="f-vitrine"
+                value={filtros.vitrine}
+                onChange={(e) => mudar('vitrine', e.target.value as FiltroCarteira['vitrine'])}
+              >
+                <option value="">No ar e fora do ar</option>
+                <option value="publicados">Somente no ar</option>
+                <option value="fora">Somente fora do ar</option>
+                <option value="destaque">Somente destaques</option>
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-quartos">Quartos (mínimo)</label>
+              <select
+                id="f-quartos"
+                value={filtros.quartosMin ?? ''}
+                onChange={(e) =>
+                  mudar('quartosMin', e.target.value ? Number(e.target.value) : null)
+                }
+              >
+                <option value="">Qualquer</option>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n}+
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-vagas">Vagas (mínimo)</label>
+              <select
+                id="f-vagas"
+                value={filtros.vagasMin ?? ''}
+                onChange={(e) => mudar('vagasMin', e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Qualquer</option>
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {n}+
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="campo">
+              <label htmlFor="f-area">Área útil mínima (m²)</label>
+              <input
+                id="f-area"
+                inputMode="numeric"
+                placeholder="120"
+                value={filtros.areaMin ?? ''}
+                onChange={(e) => mudarNumero('areaMin', e.target.value)}
+              />
+            </div>
+
+            <div className="filtros-avancados-acoes">
+              <label className="caixa-marcavel" style={{ minHeight: 36 }}>
+                <input
+                  type="checkbox"
+                  checked={filtros.semProprietario}
+                  onChange={(e) => mudar('semProprietario', e.target.checked)}
+                />
+                <span>Somente imóveis sem proprietário vinculado</span>
+              </label>
+
+              <button
+                className="btn btn-fantasma btn-pequeno empurra"
+                onClick={() => setFiltros(FILTRO_CARTEIRA_VAZIO)}
+              >
+                Limpar todos os filtros
+              </button>
+            </div>
+          </div>
+        )}
+
+        {filtrados.length === 0 ? (
+          <div className="vazio">
+            <IconeVazio />
+            <h3>Nenhum imóvel nesta seleção</h3>
+            <p>
+              Ajuste os filtros ou cadastre um imóvel novo. Todo cadastro exige um proprietário
+              vinculado, e entra fora do ar até alguém publicar.
+            </p>
+            <div className="linha-flex" style={{ justifyContent: 'center' }}>
+              {ativos > 0 && (
+                <button
+                  className="btn btn-claro"
+                  onClick={() => setFiltros(FILTRO_CARTEIRA_VAZIO)}
+                >
+                  Limpar filtros
+                </button>
+              )}
+              <button className="btn" onClick={() => setCriandoNovo(true)}>
+                <IconeMais />
+                Novo imóvel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="cartao">
+            <div className="tabela-envelope">
+              <table className="tabela tabela-responsiva">
+                <thead>
+                  <tr>
+                    <th>Imóvel</th>
+                    <th>Proprietário</th>
+                    <th>Situação</th>
+                    <th className="numerico">Valor</th>
+                    <th>Consultor</th>
+                    <th>Vitrine</th>
+                    <th className="numerico">Atualizado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtrados.map((imovel) => {
+                    const editavel = podeGerenciarImovel(usuario, imovel);
+                    const situacao = STATUS_IMOVEL[imovel.status];
+                    const dono = imovel.proprietario_id
+                      ? porProprietario.get(imovel.proprietario_id)
+                      : null;
+
+                    return (
+                      <tr key={imovel.id}>
+                        <td data-rotulo="Imóvel" className="celula-principal">
+                          <button
+                            className="botao-texto"
+                            onClick={() => setAbertoId(imovel.id)}
+                            title="Abrir a ficha do imóvel"
+                          >
+                            {imovel.titulo}
+                          </button>
+                          <span className="celula-apoio">
+                            {imovel.codigo} · {imovel.tipo}
+                            {imovel.bairro && ` · ${imovel.bairro}`}
+                            {imovel.area_util > 0 && ` · ${fmtArea(imovel.area_util)}`}
+                          </span>
+                        </td>
+
+                        <td data-rotulo="Proprietário">
+                          {dono ? (
+                            <button
+                              className="botao-texto"
+                              onClick={() => {
+                                mudar('proprietario', imovel.proprietario_id!);
+                                setAvancadosAbertos(true);
+                              }}
+                              title="Filtrar a carteira por este proprietário"
+                            >
+                              {dono}
+                            </button>
+                          ) : (
+                            <span className="marca-pendencia">
+                              <IconeAlerta />
+                              Sem proprietário
+                            </span>
+                          )}
+                        </td>
+
+                        <td data-rotulo="Situação">
+                          {editavel ? (
+                            <select
+                              value={imovel.status}
+                              onChange={(e) =>
+                                executar(mudarStatusImovel(imovel.id, e.target.value))
+                              }
+                              disabled={pendente}
+                              aria-label={`Situação de ${imovel.titulo}`}
+                              style={ESTILO_SELECT_CELULA}
+                            >
+                              {Object.entries(STATUS_IMOVEL).map(([chave, info]) => (
+                                <option key={chave} value={chave}>
+                                  {info.rotulo}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className={`etiqueta etiqueta-${situacao.cor}`}>
+                              {situacao.rotulo}
+                            </span>
+                          )}
+                        </td>
+
+                        <td data-rotulo="Valor" className="numerico">
+                          {brl(
+                            imovel.finalidade === 'locacao'
+                              ? (imovel.valor_locacao ?? 0)
+                              : imovel.valor,
+                          )}
+                          {imovel.finalidade === 'locacao' && (
+                            <span className="celula-apoio">por mês</span>
+                          )}
+                        </td>
+
+                        <td data-rotulo="Consultor">
+                          {gestor ? (
+                            <select
+                              value={imovel.corretor_id ?? ''}
+                              onChange={(e) => executar(atribuirCorretor(imovel.id, e.target.value))}
+                              disabled={pendente}
+                              aria-label={`Consultor de ${imovel.titulo}`}
+                              style={{ ...ESTILO_SELECT_CELULA, maxWidth: 160 }}
+                            >
+                              <option value="">Sem responsável</option>
+                              {equipe.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.nome}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="texto-mudo">
+                              {imovel.corretor_id
+                                ? (porPessoa.get(imovel.corretor_id) ?? 'Outro consultor')
+                                : 'Sem responsável'}
+                            </span>
+                          )}
+                        </td>
+
+                        <td data-rotulo="Vitrine">
+                          <div className="celula-vitrine">
+                            <button
+                              className={
+                                imovel.publicado ? 'btn btn-pequeno' : 'btn btn-claro btn-pequeno'
+                              }
+                              onClick={() =>
+                                executar(alternarPublicacao(imovel.id, !imovel.publicado))
+                              }
+                              disabled={pendente || !editavel}
+                              title={
+                                editavel
+                                  ? 'Publicar ou retirar do site'
+                                  : 'Somente o responsável ou a gestão'
+                              }
+                            >
+                              {imovel.publicado ? 'No ar' : 'Fora do ar'}
+                            </button>
+
+                            {imovel.publicado && (
+                              <button
+                                className="btn-icone"
+                                style={{
+                                  width: 34,
+                                  height: 34,
+                                  color: imovel.destaque ? 'var(--ouro-600)' : 'var(--cinza)',
+                                }}
+                                onClick={() =>
+                                  executar(alternarDestaque(imovel.id, !imovel.destaque))
+                                }
+                                disabled={pendente || !editavel}
+                                title={imovel.destaque ? 'Remover destaque' : 'Marcar como destaque'}
+                                aria-label="Destaque na home"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  width="17"
+                                  height="17"
+                                  fill={imovel.destaque ? 'currentColor' : 'none'}
+                                  stroke="currentColor"
+                                  strokeWidth="1.6"
+                                >
+                                  <path d="M12 3l2.6 5.8 6.4.7-4.8 4.3 1.4 6.2L12 17l-5.6 3 1.4-6.2L3 9.5l6.4-.7z" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        <td data-rotulo="Atualizado" className="numerico">
+                          {fmtData(imovel.atualizado_em)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="cartao-rodape">
+              <span className="texto-mudo">
+                Clique no título para abrir a ficha, editar ou excluir. Publicar ou retirar do ar
+                reflete no site em até 5 minutos, tempo do cache da vitrine.
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <button
+        className="acao-flutuante"
+        onClick={() => setCriandoNovo(true)}
+        aria-label="Novo imóvel"
+      >
+        <IconeMais />
+      </button>
+
+      {(aberto || criandoNovo) && (
+        <GavetaImovel
+          usuario={usuario}
+          imovel={aberto}
+          proprietarios={proprietarios}
+          equipe={equipe}
+          aoFechar={fecharGaveta}
+          aoConcluir={aoConcluir}
+          aoPedirProprietario={() => router.push('/proprietarios')}
+        />
+      )}
+
+      {recado && (
+        <Recado texto={recado.texto} erro={recado.erro} aoFechar={() => setRecado(null)} />
+      )}
+    </>
+  );
+}
+
+function ResumoRapido({
+  rotulo,
+  valor,
+  alerta,
+}: {
+  rotulo: string;
+  valor: string;
+  alerta?: boolean;
+}) {
+  return (
+    <div className={`resumo-item${alerta ? ' resumo-item-alerta' : ''}`}>
+      <span className="indicador-rotulo">{rotulo}</span>
+      <strong>{valor}</strong>
+    </div>
+  );
+}

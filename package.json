@@ -1,0 +1,23 @@
+{
+  "name": "boost-imoveis",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Plataforma da Boost Negocios Imobiliarios. Site publico + sistema de gestao.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:site": "npm run dev --workspace @boost/site",
+    "dev:app": "npm run dev --workspace @boost/app",
+    "build:site": "npm run build --workspace @boost/site",
+    "build:app": "npm run build --workspace @boost/app",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:types": "supabase gen types typescript --linked > packages/db/src/database.types.ts",
+    "assets": "node scripts/sincronizar-assets.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

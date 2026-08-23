@@ -1,0 +1,236 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+import { iniciais, type Perfil } from '@boost/core';
+
+import { supabaseNavegador } from '@/lib/supabase-navegador';
+import {
+  IconeAgenda,
+  IconeChave,
+  IconeEquipe,
+  IconeFechar,
+  IconeFinanceiro,
+  IconeFunil,
+  IconeImovel,
+  IconeMenu,
+  IconePainel,
+  IconeRelatorio,
+  IconeSair,
+  IconeUsuario,
+} from './Icones';
+
+interface ItemMenu {
+  href: string;
+  rotulo: string;
+  curto: string;
+  Icone: (p: React.SVGProps<SVGSVGElement>) => React.ReactElement;
+  area?: 'imoveis' | 'leads' | 'financeiro' | 'usuarios';
+  somenteGestor?: boolean;
+  /** Separa o dia a dia da leitura consolidada, na lateral. */
+  grupo: 'Operação' | 'Gestão';
+}
+
+const MENU: ItemMenu[] = [
+  { href: '/', rotulo: 'Visão geral', curto: 'Início', Icone: IconePainel, grupo: 'Operação' },
+  { href: '/agenda', rotulo: 'Agenda', curto: 'Agenda', Icone: IconeAgenda, grupo: 'Operação' },
+  {
+    href: '/leads',
+    rotulo: 'Leads',
+    curto: 'Leads',
+    Icone: IconeFunil,
+    area: 'leads',
+    grupo: 'Operação',
+  },
+  {
+    href: '/imoveis',
+    rotulo: 'Imóveis',
+    curto: 'Imóveis',
+    Icone: IconeImovel,
+    area: 'imoveis',
+    grupo: 'Operação',
+  },
+  {
+    href: '/proprietarios',
+    rotulo: 'Proprietários',
+    curto: 'Donos',
+    Icone: IconeChave,
+    area: 'imoveis',
+    grupo: 'Operação',
+  },
+  {
+    href: '/financeiro',
+    rotulo: 'Financeiro',
+    curto: 'Vendas',
+    Icone: IconeFinanceiro,
+    area: 'financeiro',
+    grupo: 'Gestão',
+  },
+  {
+    href: '/indicadores',
+    rotulo: 'Indicadores',
+    curto: 'Números',
+    Icone: IconeRelatorio,
+    somenteGestor: true,
+    grupo: 'Gestão',
+  },
+  {
+    href: '/equipe',
+    rotulo: 'Equipe',
+    curto: 'Equipe',
+    Icone: IconeEquipe,
+    somenteGestor: true,
+    grupo: 'Gestão',
+  },
+];
+
+const GRUPOS: ItemMenu['grupo'][] = ['Operação', 'Gestão'];
+
+function liberado(item: ItemMenu, usuario: Perfil): boolean {
+  const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+  if (item.somenteGestor && !gestor) return false;
+  if (item.area && usuario.papel !== 'admin' && !usuario.permissoes?.[item.area]) return false;
+  return true;
+}
+
+/** Ativo tambem nas subpaginas, para /agenda/123 manter a aba acesa. */
+function estaAtivo(href: string, caminho: string): boolean {
+  return href === '/' ? caminho === '/' : caminho.startsWith(href);
+}
+
+export function Navegacao({ usuario }: { usuario: Perfil }) {
+  const caminho = usePathname();
+  const router = useRouter();
+  const [aberta, setAberta] = useState(false);
+
+  const itens = MENU.filter((i) => liberado(i, usuario));
+  // A barra do celular comporta cinco alvos sem apertar demais.
+  const itensCelular = itens.slice(0, 5);
+
+  useEffect(() => {
+    setAberta(false);
+  }, [caminho]);
+
+  /**
+   * O botao que abre a lateral vive no cabecalho de cada pagina, nao
+   * aqui. Em vez de espalhar um contexto pelo app inteiro por causa de
+   * um unico booleano, o botao dispara um evento e a lateral escuta.
+   */
+  useEffect(() => {
+    const abrir = () => setAberta(true);
+    window.addEventListener('boost:abrir-menu', abrir);
+    return () => window.removeEventListener('boost:abrir-menu', abrir);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = aberta ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [aberta]);
+
+  async function sair() {
+    await supabaseNavegador().auth.signOut();
+    router.replace('/entrar');
+    router.refresh();
+  }
+
+  return (
+    <>
+      <aside className={`lateral${aberta ? ' aberta' : ''}`}>
+        <div className="lateral-marca">
+          <span className="selo" aria-hidden="true" />
+          <div style={{ minWidth: 0 }}>
+            <strong>Boost</strong>
+            <span>Gestão</span>
+          </div>
+          <button
+            className="btn-icone somente-celular empurra"
+            style={{ color: 'rgba(255,255,255,.6)' }}
+            onClick={() => setAberta(false)}
+            aria-label="Fechar menu"
+          >
+            <IconeFechar />
+          </button>
+        </div>
+
+        {GRUPOS.map((grupo) => {
+          const doGrupo = itens.filter((i) => i.grupo === grupo);
+          if (doGrupo.length === 0) return null;
+
+          return (
+            <nav key={grupo} className="lateral-grupo">
+              <p className="lateral-grupo-titulo">{grupo}</p>
+              {doGrupo.map(({ href, rotulo, Icone }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="lateral-item"
+                  aria-current={estaAtivo(href, caminho) ? 'page' : undefined}
+                >
+                  <Icone />
+                  {rotulo}
+                </Link>
+              ))}
+            </nav>
+          );
+        })}
+
+        <div className="lateral-rodape">
+          <Link href="/perfil" className="cartao-usuario">
+            <span className="avatar">{iniciais(usuario.nome)}</span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <strong>{usuario.nome}</strong>
+              <span>{usuario.papel}</span>
+            </span>
+          </Link>
+
+          <button
+            className="lateral-item"
+            onClick={sair}
+            style={{ width: '100%', marginTop: 4 }}
+          >
+            <IconeSair />
+            Sair do sistema
+          </button>
+        </div>
+      </aside>
+
+      {aberta && (
+        <div
+          className="fundo-escuro somente-celular"
+          onClick={() => setAberta(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <div className="barra-inferior">
+        <nav aria-label="Navegação principal">
+          {itensCelular.map(({ href, curto, Icone }) => (
+            <Link
+              key={href}
+              href={href}
+              className="item-inferior"
+              aria-current={estaAtivo(href, caminho) ? 'page' : undefined}
+            >
+              <Icone />
+              {curto}
+            </Link>
+          ))}
+          {itensCelular.length < 5 && (
+            <Link
+              href="/perfil"
+              className="item-inferior"
+              aria-current={caminho === '/perfil' ? 'page' : undefined}
+            >
+              <IconeUsuario />
+              Perfil
+            </Link>
+          )}
+        </nav>
+      </div>
+    </>
+  );
+}

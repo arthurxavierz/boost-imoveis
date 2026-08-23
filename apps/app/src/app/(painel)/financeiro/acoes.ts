@@ -1,0 +1,270 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+
+import { sugerirParcelas, validarVenda, type Venda } from '@boost/core';
+
+import { baixarParcelaDemo, salvarVendaDemo, statusVendaDemo } from '@/lib/dados-demo';
+import { modoDemo } from '@/lib/demonstracao';
+import { exigirUsuario } from '@/lib/sessao';
+import { supabaseServidor } from '@/lib/supabase-servidor';
+
+/**
+ * Acoes do financeiro.
+ *
+ * Como na agenda, rodam com a sessao do usuario, entao o RLS da
+ * migration 0007 continua sendo a trava real: um consultor so alcanca as
+ * proprias vendas, e so enquanto elas nao foram concluidas.
+ *
+ * Nenhum valor de comissao e enviado ao banco. Os campos comissao_bruta,
+ * comissao_casa, comissao_consultor e margem sao colunas geradas: quem
+ * calcula e o Postgres. Mandar esses numeros daqui seria abrir espaco
+ * para a tela e o banco discordarem.
+ */
+
+export interface EstadoAcao {
+  ok: boolean;
+  erro?: string;
+  mensagem?: string;
+}
+
+function texto(dados: FormData, campo: string): string {
+  return String(dados.get(campo) ?? '').trim();
+}
+
+/** "1.250.000" e "1250000" viram 1250000. Campo com mascara chega assim. */
+function numero(dados: FormData, campo: string): number {
+  const bruto = texto(dados, campo).replace(/\./g, '').replace(',', '.');
+  const n = Number(bruto);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+export async function salvarVenda(_anterior: EstadoAcao, dados: FormData): Promise<EstadoAcao> {
+  const usuario = await exigirUsuario();
+  const supabase = await supabaseServidor();
+
+  const id = texto(dados, 'id');
+  const status = texto(dados, 'status') || 'proposta';
+
+  const registro = {
+    tipo: texto(dados, 'tipo') || 'venda',
+    imovel_id: texto(dados, 'imovel_id') || null,
+    imovel_titulo: texto(dados, 'imovel_titulo'),
+    lead_id: texto(dados, 'lead_id') || null,
+
+    comprador_nome: texto(dados, 'comprador_nome'),
+    comprador_telefone: texto(dados, 'comprador_telefone') || null,
+    comprador_email: texto(dados, 'comprador_email') || null,
+    proprietario_nome: texto(dados, 'proprietario_nome') || null,
+
+    valor_tabela: numero(dados, 'valor_tabela'),
+    valor_venda: numero(dados, 'valor_venda'),
+
+    forma_pagamento: texto(dados, 'forma_pagamento') || 'financiado',
+    entrada: numero(dados, 'entrada'),
+    valor_financiado: numero(dados, 'valor_financiado'),
+    banco: texto(dados, 'banco') || null,
+
+    percentual_comissao: numero(dados, 'percentual_comissao') || 6,
+    percentual_casa: numero(dados, 'percentual_casa'),
+    percentual_captador: numero(dados, 'percentual_captador'),
+    custos: numero(dados, 'custos'),
+
+    consultor_id: texto(dados, 'consultor_id') || null,
+    captador_id: texto(dados, 'captador_id') || null,
+
+    status,
+    data_proposta: texto(dados, 'data_proposta') || new Date().toISOString().slice(0, 10),
+    data_assinatura: texto(dados, 'data_assinatura') || null,
+    data_conclusao: texto(dados, 'data_conclusao') || null,
+
+    motivo_cancelamento: texto(dados, 'motivo_cancelamento') || null,
+    observacoes: texto(dados, 'observacoes') || null,
+  };
+
+  const problemas = validarVenda(registro as Partial<Venda>);
+  if (problemas.length > 0) return { ok: false, erro: problemas[0] };
+
+  if (modoDemo()) {
+    const r = salvarVendaDemo(usuario, { ...registro, id: id || undefined } as Partial<Venda>);
+    if (!r.ok) return { ok: false, erro: r.erro };
+    revalidatePath('/financeiro');
+    revalidatePath('/');
+    revalidatePath('/imoveis');
+    return {
+      ok: true,
+      mensagem: id ? 'Negócio atualizado.' : 'Negócio ' + r.codigo + ' registrado.',
+    };
+  }
+
+  const resposta = id
+    ? await supabase.from('vendas').update(registro).eq('id', id).select('*').single()
+    : await supabase
+        .from('vendas')
+        .insert({ ...registro, criado_por: usuario.id })
+        .select('*')
+        .single();
+
+  if (resposta.error) {
+    console.error('[financeiro] falha ao salvar venda:', resposta.error);
+    return { ok: false, erro: traduzirErro(resposta.error.message) };
+  }
+
+  const venda = resposta.data as Venda;
+
+  /**
+   * Cria as parcelas da comissao no primeiro salvamento, quando ainda
+   * nao existe nenhuma. Depois disso o financeiro ajusta a mao, e o
+   * sistema nao mexe mais: reescrever parcela que alguem ja conferiu
+   * seria pior do que nao sugerir nada.
+   */
+  if (!id && venda.comissao_bruta > 0) {
+    const { count } = await supabase
+      .from('venda_parcelas')
+      .select('id', { count: 'exact', head: true })
+      .eq('venda_id', venda.id);
+
+    if (!count) {
+      const parcelas = sugerirParcelas(venda).map((p) => ({
+        venda_id: venda.id,
+        descricao: p.descricao,
+        destino: 'casa' as const,
+        valor: p.valor,
+        vencimento: p.vencimento,
+        status: 'pendente' as const,
+      }));
+
+      if (parcelas.length > 0) {
+        const { error } = await supabase.from('venda_parcelas').insert(parcelas);
+        // Falhar aqui nao invalida a venda, que ja esta gravada.
+        if (error) console.error('[financeiro] parcelas sugeridas:', error);
+      }
+    }
+  }
+
+  revalidatePath('/financeiro');
+  revalidatePath('/');
+
+  return {
+    ok: true,
+    mensagem: id
+      ? 'Negócio atualizado.'
+      : `Negócio ${venda.codigo} registrado.`,
+  };
+}
+
+export async function mudarStatusVenda(
+  id: string,
+  status: string,
+  motivo?: string,
+): Promise<EstadoAcao> {
+  const usuario = await exigirUsuario();
+
+  const permitidos = ['proposta', 'aprovada', 'contrato', 'concluida', 'cancelada'];
+  if (!permitidos.includes(status)) return { ok: false, erro: 'Situação inválida.' };
+
+  if (status === 'cancelada' && !motivo?.trim()) {
+    return { ok: false, erro: 'Informe o motivo do cancelamento.' };
+  }
+
+  if (modoDemo()) {
+    const r = statusVendaDemo(usuario, id, status, motivo);
+    revalidatePath('/financeiro');
+    revalidatePath('/');
+    revalidatePath('/imoveis');
+    if (!r.ok) return { ok: false, erro: r.erro };
+    return {
+      ok: true,
+      mensagem:
+        status === 'concluida'
+          ? 'Negócio concluído. O imóvel saiu da vitrine e a comissão foi lançada no caixa.'
+          : 'Situação atualizada.',
+    };
+  }
+
+  const supabase = await supabaseServidor();
+
+  const alteracao: Record<string, unknown> = { status };
+  if (status === 'cancelada') alteracao.motivo_cancelamento = motivo?.trim();
+  // A data de conclusao e preenchida pelo gatilho do banco quando fica
+  // nula, entao nao precisa ser enviada daqui.
+
+  const { error } = await supabase.from('vendas').update(alteracao).eq('id', id);
+
+  if (error) {
+    console.error('[financeiro] falha ao mudar status:', error);
+    return { ok: false, erro: traduzirErro(error.message) };
+  }
+
+  revalidatePath('/financeiro');
+  revalidatePath('/');
+  revalidatePath('/imoveis');
+
+  return {
+    ok: true,
+    mensagem:
+      status === 'concluida'
+        ? 'Negócio concluído. O imóvel saiu da vitrine e a comissão foi lançada no caixa.'
+        : 'Situação atualizada.',
+  };
+}
+
+/** Baixa de parcela: o dinheiro entrou de fato. */
+export async function baixarParcela(id: string, pago: boolean): Promise<EstadoAcao> {
+  await exigirUsuario();
+
+  if (modoDemo()) {
+    const r = baixarParcelaDemo(id, pago);
+    revalidatePath('/financeiro');
+    return r.ok
+      ? { ok: true, mensagem: pago ? 'Parcela baixada.' : 'Baixa desfeita.' }
+      : { ok: false, erro: r.erro };
+  }
+
+  const supabase = await supabaseServidor();
+
+  const { error } = await supabase
+    .from('venda_parcelas')
+    .update(
+      pago
+        ? { status: 'pago', pago_em: new Date().toISOString().slice(0, 10) }
+        : { status: 'pendente', pago_em: null },
+    )
+    .eq('id', id);
+
+  if (error) {
+    console.error('[financeiro] falha na baixa:', error);
+    return { ok: false, erro: traduzirErro(error.message) };
+  }
+
+  revalidatePath('/financeiro');
+  return { ok: true, mensagem: pago ? 'Parcela baixada.' : 'Baixa desfeita.' };
+}
+
+export async function excluirVenda(id: string): Promise<EstadoAcao> {
+  await exigirUsuario();
+  const supabase = await supabaseServidor();
+
+  const { error } = await supabase.from('vendas').delete().eq('id', id);
+
+  if (error) {
+    console.error('[financeiro] falha ao excluir:', error);
+    return { ok: false, erro: traduzirErro(error.message) };
+  }
+
+  revalidatePath('/financeiro');
+  return { ok: true, mensagem: 'Negócio excluído.' };
+}
+
+function traduzirErro(mensagem: string): string {
+  if (mensagem.includes('row-level security') || mensagem.includes('violates row-level')) {
+    return 'Você não tem permissão para alterar este negócio. Negócio concluído só é alterado pela gestão.';
+  }
+  if (mensagem.includes('venda_divisao_coerente')) {
+    return 'A soma da parte da casa com a do captador não pode passar de 100%.';
+  }
+  if (mensagem.includes('venda_cancelamento_justificado')) {
+    return 'Informe o motivo do cancelamento.';
+  }
+  return 'Não foi possível salvar agora. Tente novamente.';
+}

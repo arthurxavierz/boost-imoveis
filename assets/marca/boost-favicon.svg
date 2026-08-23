@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!--
+    Favicon. Fundo preto solido, simbolo em ouro.
+
+    O traco aqui e proporcionalmente mais grosso que o do simbolo
+    solto, e a margem maior. Na aba do navegador isto vira 16 pixels:
+    o contorno fino do original desaparece nesse tamanho, e a marca
+    chega como um borrao amarelo. Engrossar e o que mantem o "B"
+    legivel quando ele fica do tamanho de uma letra.
+  -->
+  <rect width="512" height="512" rx="104" fill="#000000" />
+  <g transform="translate(152 104) scale(0.52)" stroke="#f3c623" stroke-width="62" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M17 17 H260 A123 123 0 0 1 260 263 H175 Z" />
+    <path d="M17 297 H260 A135.5 135.5 0 0 1 260 568 H17 Z" />
+  </g>
+</svg>

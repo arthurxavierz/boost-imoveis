@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 412 585" fill="none" role="img" aria-label="Boost">
+  <!--
+    O "B" da Boost, em traco aberto.
+
+    Duas tigelas empilhadas: a de baixo reta, a de cima cortada na
+    diagonal. A diagonal e o fecho do proprio contorno (o Z do path),
+    e nao um traco solto por cima: por isso a juncao com o topo forma
+    uma ponta viva, e nao um encontro de duas linhas.
+
+    A cor cravada aqui vale pouco: em quase todo lugar este arquivo
+    entra como mascara CSS (-webkit-mask), e mascara so enxerga alfa —
+    quem pinta e o background do elemento, entao o mesmo desenho sai
+    ouro no site e branco no painel. O ouro fica como padrao apenas
+    para o caso de alguem usar o arquivo direto num <img>.
+
+    Nao troque por currentColor: SVG referenciado como imagem nao tem
+    contexto de cor, currentColor resolve para transparente e a
+    mascara recorta o desenho inteiro. Ja aconteceu.
+  -->
+  <g stroke="#f3c623" stroke-width="34" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M17 17 H260 A123 123 0 0 1 260 263 H175 Z" />
+    <path d="M17 297 H260 A135.5 135.5 0 0 1 260 568 H17 Z" />
+  </g>
+</svg>

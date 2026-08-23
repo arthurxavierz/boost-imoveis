@@ -1,0 +1,18 @@
+# Dependencias
+node_modules
+
+# Build
+dist
+
+# Variaveis de ambiente. NUNCA suba estes arquivos para o GitHub.
+# Eles guardam suas chaves secretas.
+.env
+.env.local
+.env.*.local
+
+# Netlify
+.netlify
+
+# Sistema
+.DS_Store
+*.log

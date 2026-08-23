@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Boost Negocios Imobiliarios. Alto padrao, exclusividade e lancamentos em Uberlandia.">
+<title>Boost Negocios Imobiliarios</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%230d0c11'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23ece7dd' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div class="gate" id="gate">
+  <div class="gate-inner">
+    <div class="mono">B</div>
+    <div class="gate-brand">Boost</div>
+    <div class="gate-sub">Negocios Imobiliarios</div>
+    <div class="gate-tag">Imoveis que elevam seu<br>patrimonio e qualidade de vida.</div>
+    <div class="field">
+      <label>E-mail</label>
+      <input type="email" value="diego@boostimoveis.com.br" id="gEmail">
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" value="demo1234" id="gPass">
+    </div>
+    <button class="btn-gold" id="btnEntrar">Entrar</button>
+    <div class="gate-error" id="gateError"></div>
+    <div class="gate-note">Uberlandia, Minas Gerais</div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div class="app" id="app">
+
+  <div class="side-overlay" id="sideOverlay"></div>
+
+  <aside class="side" id="side">
+    <div class="side-head">
+      <div class="mono">B</div>
+      <div class="wm">Boost<span>Negocios Imobiliarios</span></div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-label">Gestao</div>
+      <a class="nav-item active" data-view="painel">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Painel
+      </a>
+      <a class="nav-item" data-view="imoveis" data-perm="imoveis">
+        <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h6"/></svg>
+        Imoveis
+      </a>
+      <a class="nav-item" data-view="leads" data-perm="leads">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Leads
+      </a>
+      <a class="nav-item" data-view="financeiro" data-perm="financeiro">
+        <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Financeiro
+      </a>
+      <div class="nav-label" data-admin="true">Administracao</div>
+      <a class="nav-item" data-view="usuarios" data-admin="true">
+        <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M19 8v6M22 11h-6"/></svg>
+        Usuarios
+      </a>
+      <div class="nav-label">Publico</div>
+      <a class="nav-item" data-view="vitrine">
+        <svg viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        Vitrine
+      </a>
+    </nav>
+    <div class="side-foot">
+      <div class="user">
+        <div class="av" id="userAv">DM</div>
+        <div class="who" id="userWho">Diego Martins<span id="userRole">Administrador</span></div>
+      </div>
+      <div class="acting" id="actingWrap">
+        <label>Ver como (demonstracao)</label>
+        <select id="actingSelect"></select>
+      </div>
+      <button class="logout" id="btnLogout">Sair</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger" id="hamburger" aria-label="Abrir menu">
+          <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <div>
+          <div class="crumb" id="crumb">Gestao</div>
+          <div class="ttl" id="pageTitle">Painel</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div class="search">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input placeholder="Buscar imovel, lead, bairro" id="globalSearch">
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PAINEL ===== -->
+    <section class="view" id="v-painel">
+      <div id="dashScope"></div>
+      <div class="kpi-row" id="kpiRow"></div>
+      <div class="panel-2">
+        <div class="card">
+          <div class="card-h"><h3>Funil de vendas</h3><span class="link" data-goto="leads">Ver leads</span></div>
+          <div class="funnel" id="funnel"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Atividade recente</h3></div>
+          <div class="feed">
+            <div class="feed-item"><div class="feed-dot"></div><div><p><b>Novo lead</b> pela vitrine para Cobertura Duplex, Morada da Colina.</p><div class="t">Ha 12 minutos</div></div></div>
+            <div class="feed-item"><div class="feed-dot"></div><div><p>Visita confirmada por <b>Eduardo Prado</b> ao WTC Uberlandia.</p><div class="t">Ha 48 minutos</div></div></div>
+            <div class="feed-item"><div class="feed-dot"></div><div><p>Proposta enviada para <b>Studios Francisco Galassi</b>, unidade 1204.</p><div class="t">Ha 2 horas</div></div></div>
+            <div class="feed-item"><div class="feed-dot"></div><div><p>Casa em Jardim Karaiba movida para <b>Reservado</b>.</p><div class="t">Ontem, 18h20</div></div></div>
+          </div>
+        </div>
+      </div>
+      <div id="dashPerf"></div>
+    </section>
+
+    <!-- ===== IMOVEIS ===== -->
+    <section class="view" id="v-imoveis" hidden>
+      <div class="filters" id="propFilters">
+        <button class="chip on" data-f="todos">Todos</button>
+        <button class="chip" data-f="disponivel">Disponivel</button>
+        <button class="chip" data-f="reservado">Reservado</button>
+        <button class="chip" data-f="vendido">Vendido</button>
+        <button class="chip" data-f="locado">Locado</button>
+        <div class="spacer"></div>
+        <button class="btn-add" id="btnNovoImovel"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Novo imovel</button>
+      </div>
+      <div class="grid" id="propGrid"></div>
+    </section>
+
+    <!-- ===== LEADS ===== -->
+    <section class="view" id="v-leads" hidden>
+      <div class="filters">
+        <div class="hint" style="margin:0">Arraste um lead entre as colunas para avancar. Clique para abrir e anotar.</div>
+        <div class="spacer"></div>
+        <button class="chip" id="toggleArquivados" data-on="false">Ver arquivados</button>
+      </div>
+      <div class="board" id="board"></div>
+    </section>
+
+    <!-- ===== FINANCEIRO ===== -->
+    <section class="view" id="v-financeiro" hidden>
+      <div id="finContent"></div>
+    </section>
+
+    <!-- ===== USUARIOS ===== -->
+    <section class="view" id="v-usuarios" hidden>
+      <div class="filters">
+        <div class="hint" style="margin:0">Gestao de acesso. Ligue ou desligue funcionalidades por usuario.</div>
+        <div class="spacer"></div>
+        <button class="btn-add" id="btnNovoUsuario"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Novo usuario</button>
+      </div>
+      <div id="usuariosList"></div>
+    </section>
+
+    <!-- ===== VITRINE ===== -->
+    <section class="view" id="v-vitrine" hidden>
+      <div class="hint">Previa da vitrine publica. E assim que o cliente ve os imoveis disponiveis em boostimoveis.com.br.</div>
+      <div class="vit-frame">
+        <div class="vit-bar">
+          <div class="d"></div><div class="d"></div><div class="d"></div>
+          <div class="url">boostimoveis.com.br</div>
+        </div>
+        <div class="vit-hero">
+          <div class="mono">B</div>
+          <span class="eyebrow">Alto padrao em Uberlandia</span>
+          <h2>Invista no que <em>realmente</em><br>gera valor.</h2>
+          <p>Exclusividade, alto padrao e lancamentos selecionados.</p>
+          <div class="vit-search">
+            <input placeholder="Bairro, tipo de imovel ou valor">
+            <button>Buscar</button>
+          </div>
+        </div>
+        <div class="vit-gallery">
+          <div class="gh"><h3>Selecao em destaque</h3><span id="vitCount"></span></div>
+          <div class="grid" id="vitGrid"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- modais preenchidos dinamicamente -->
+<div class="modal-bg" id="detailBg"><div class="modal" id="detailModal"></div></div>
+<div class="modal-bg" id="imovelBg"><div class="modal form-modal" id="imovelModal"></div></div>
+<div class="modal-bg" id="leadBg"><div class="modal" id="leadModal"></div></div>
+<div class="modal-bg" id="usuarioBg"><div class="modal form-modal" id="usuarioModal"></div></div>
+<div class="modal-bg" id="transacaoBg"><div class="modal form-modal" id="transacaoModal"></div></div>
+<div class="modal-bg" id="confirmBg"><div class="modal confirm-modal" id="confirmModal"></div></div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,1180 @@
+/**
+ * Leitura e escrita da base de demonstração, no formato que cada tela
+ * do painel espera.
+ *
+ * As funções aqui fazem o que o banco faria: juntam os nomes das
+ * pessoas aos registros, aplicam o mesmo recorte de permissão do RLS e
+ * reproduzem os efeitos em cascata (concluir uma venda tira o imóvel da
+ * vitrine, por exemplo). Sem isso a demonstração enganaria: pareceria
+ * funcionar e depois se comportaria diferente com o banco real.
+ */
+
+import type {
+  BaseIndicadores,
+  Compromisso,
+  CompromissoDetalhado,
+  Imovel,
+  Interacao,
+  Lead,
+  Perfil,
+  Proprietario,
+  ProprietarioComCarteira,
+  Venda,
+  VendaDetalhada,
+  VendaParcela,
+} from '@boost/core';
+import { permissoesPadrao, resumirCarteira, slugify, validarAlteracaoAcesso } from '@boost/core';
+import { alterarBase, lerBase, novoId, proximoCodigo } from '@boost/demo';
+
+function nomes(): Map<string, string> {
+  return new Map(lerBase().perfis.map((p) => [p.id, p.nome]));
+}
+
+// ------------------------------------------------------------
+// AGENDA
+// ------------------------------------------------------------
+
+export function compromissosDemo(inicio: Date, fim: Date): CompromissoDetalhado[] {
+  const base = lerBase();
+  const porPessoa = nomes();
+  const porImovel = new Map(base.imoveis.map((i) => [i.id, i.titulo]));
+  const porLead = new Map(base.leads.map((l) => [l.id, l.nome]));
+
+  return base.compromissos
+    .filter((c) => c.inicio >= inicio.toISOString() && c.inicio <= fim.toISOString())
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))
+    .map((c) => ({
+      ...c,
+      responsavel_nome: porPessoa.get(c.responsavel_id) ?? 'Sem responsável',
+      criado_por_nome: c.criado_por ? (porPessoa.get(c.criado_por) ?? null) : null,
+      imovel_titulo: c.imovel_id ? (porImovel.get(c.imovel_id) ?? null) : null,
+      lead_nome: c.lead_id ? (porLead.get(c.lead_id) ?? null) : null,
+    }));
+}
+
+/**
+ * Mesma regra da função pode_gerir_compromisso() do banco. Repetida aqui
+ * porque na demonstração não há Postgres recusando a operação, e sem
+ * isso o corretor conseguiria apagar o plantão que a gestão fixou.
+ */
+function podeGerir(usuario: Perfil, compromisso: Compromisso): boolean {
+  if (usuario.papel === 'admin' || usuario.papel === 'gestor') return true;
+  if (compromisso.travado) return false;
+  return compromisso.responsavel_id === usuario.id;
+}
+
+export function salvarCompromissoDemo(
+  usuario: Perfil,
+  dados: Partial<Compromisso> & { id?: string },
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const agora = new Date().toISOString();
+
+    if (dados.id) {
+      const indice = base.compromissos.findIndex((c) => c.id === dados.id);
+      if (indice < 0) return { ok: false, erro: 'Compromisso não encontrado.' };
+
+      if (!podeGerir(usuario, base.compromissos[indice])) {
+        return {
+          ok: false,
+          erro: 'Este compromisso foi fixado pela gestão e não pode ser alterado por você.',
+        };
+      }
+
+      base.compromissos[indice] = {
+        ...base.compromissos[indice],
+        ...dados,
+        atualizado_em: agora,
+      } as Compromisso;
+
+      return { ok: true };
+    }
+
+    base.compromissos.push({
+      id: novoId(),
+      titulo: dados.titulo ?? 'Sem título',
+      observacao: dados.observacao ?? null,
+      tipo: dados.tipo ?? 'visita',
+      inicio: dados.inicio!,
+      fim: dados.fim!,
+      dia_inteiro: dados.dia_inteiro ?? false,
+      local: dados.local ?? null,
+      responsavel_id: dados.responsavel_id ?? usuario.id,
+      criado_por: usuario.id,
+      imovel_id: dados.imovel_id ?? null,
+      lead_id: dados.lead_id ?? null,
+      status: dados.status ?? 'agendado',
+      travado: dados.travado ?? false,
+      lembrete_minutos: dados.lembrete_minutos ?? 60,
+      canais: ['app'],
+      notificado_em: null,
+      criado_em: agora,
+      atualizado_em: agora,
+    });
+
+    return { ok: true };
+  });
+}
+
+export function excluirCompromissoDemo(
+  usuario: Perfil,
+  id: string,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const alvo = base.compromissos.find((c) => c.id === id);
+    if (!alvo) return { ok: false, erro: 'Compromisso não encontrado.' };
+
+    if (!podeGerir(usuario, alvo)) {
+      return { ok: false, erro: 'Você não tem permissão para excluir este compromisso.' };
+    }
+
+    base.compromissos = base.compromissos.filter((c) => c.id !== id);
+    return { ok: true };
+  });
+}
+
+export function statusCompromissoDemo(
+  usuario: Perfil,
+  id: string,
+  status: string,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const alvo = base.compromissos.find((c) => c.id === id);
+    if (!alvo) return { ok: false, erro: 'Compromisso não encontrado.' };
+
+    if (!podeGerir(usuario, alvo)) {
+      return { ok: false, erro: 'Você não tem permissão para alterar este compromisso.' };
+    }
+
+    alvo.status = status as Compromisso['status'];
+    alvo.atualizado_em = new Date().toISOString();
+    return { ok: true };
+  });
+}
+
+// ------------------------------------------------------------
+// FINANCEIRO
+// ------------------------------------------------------------
+
+export function vendasDemo(status?: string): VendaDetalhada[] {
+  const base = lerBase();
+  const porPessoa = nomes();
+
+  return base.vendas
+    .filter((v) => !status || v.status === status)
+    .sort((a, b) => b.data_proposta.localeCompare(a.data_proposta))
+    .map((v) => ({
+      ...v,
+      consultor_nome: v.consultor_id ? (porPessoa.get(v.consultor_id) ?? null) : null,
+      captador_nome: v.captador_id ? (porPessoa.get(v.captador_id) ?? null) : null,
+    }));
+}
+
+export function parcelasDemo(): VendaParcela[] {
+  return [...lerBase().parcelas].sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+}
+
+function arredondar(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+/** Recalcula as colunas que no banco são geradas pelo Postgres. */
+function derivar(v: Venda): Venda {
+  const bruta = arredondar((v.valor_venda * v.percentual_comissao) / 100);
+  const casa = arredondar(bruta * (v.percentual_casa / 100));
+  const captador = arredondar(bruta * (v.percentual_captador / 100));
+
+  return {
+    ...v,
+    desconto: Math.max(0, arredondar(v.valor_tabela - v.valor_venda)),
+    comissao_bruta: bruta,
+    comissao_casa: casa,
+    comissao_captador: captador,
+    comissao_consultor: arredondar(bruta - casa - captador),
+    margem: arredondar(casa - v.custos),
+  };
+}
+
+/**
+ * Efeitos de concluir uma venda, iguais aos do gatilho do banco: o
+ * imóvel sai da vitrine, o lead vinculado fecha e a data é preenchida.
+ */
+function aoConcluir(base: ReturnType<typeof lerBase>, venda: Venda): void {
+  if (!venda.data_conclusao) venda.data_conclusao = new Date().toISOString().slice(0, 10);
+
+  if (venda.imovel_id) {
+    const imovel = base.imoveis.find((i) => i.id === venda.imovel_id);
+    if (imovel) {
+      imovel.status = venda.tipo === 'locacao' ? 'locado' : 'vendido';
+      imovel.publicado = false;
+      imovel.destaque = false;
+      imovel.atualizado_em = new Date().toISOString();
+    }
+  }
+
+  if (venda.lead_id) {
+    const lead = base.leads.find((l) => l.id === venda.lead_id);
+    if (lead) lead.etapa = 'fechado';
+  }
+}
+
+export function salvarVendaDemo(
+  usuario: Perfil,
+  dados: Partial<Venda> & { id?: string },
+): { ok: boolean; erro?: string; codigo?: string } {
+  return alterarBase((base) => {
+    const agora = new Date().toISOString();
+
+    if (dados.id) {
+      const indice = base.vendas.findIndex((v) => v.id === dados.id);
+      if (indice < 0) return { ok: false, erro: 'Negócio não encontrado.' };
+
+      const atual = base.vendas[indice];
+      const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+      const donoPodendo =
+        atual.consultor_id === usuario.id && ['proposta', 'aprovada'].includes(atual.status);
+
+      if (!gestor && !donoPodendo) {
+        return {
+          ok: false,
+          erro: 'Negócio concluído vira histórico contábil e só a gestão pode alterar.',
+        };
+      }
+
+      const atualizado = derivar({ ...atual, ...dados, atualizado_em: agora } as Venda);
+
+      if (atualizado.status === 'concluida' && atual.status !== 'concluida') {
+        aoConcluir(base, atualizado);
+      }
+
+      base.vendas[indice] = atualizado;
+      return { ok: true, codigo: atualizado.codigo };
+    }
+
+    const nova = derivar({
+      id: novoId(),
+      codigo: proximoCodigo('VEN', base.vendas),
+      tipo: dados.tipo ?? 'venda',
+      imovel_id: dados.imovel_id ?? null,
+      imovel_titulo: dados.imovel_titulo ?? 'Imóvel',
+      lead_id: dados.lead_id ?? null,
+      comprador_nome: dados.comprador_nome ?? '',
+      comprador_telefone: dados.comprador_telefone ?? null,
+      comprador_email: dados.comprador_email ?? null,
+      proprietario_nome: dados.proprietario_nome ?? null,
+      valor_tabela: dados.valor_tabela ?? 0,
+      valor_venda: dados.valor_venda ?? 0,
+      desconto: 0,
+      forma_pagamento: dados.forma_pagamento ?? 'financiado',
+      entrada: dados.entrada ?? 0,
+      valor_financiado: dados.valor_financiado ?? 0,
+      banco: dados.banco ?? null,
+      percentual_comissao: dados.percentual_comissao ?? 6,
+      percentual_casa: dados.percentual_casa ?? 50,
+      percentual_captador: dados.percentual_captador ?? 0,
+      comissao_bruta: 0,
+      comissao_casa: 0,
+      comissao_captador: 0,
+      comissao_consultor: 0,
+      custos: dados.custos ?? 0,
+      margem: 0,
+      consultor_id: dados.consultor_id ?? usuario.id,
+      captador_id: dados.captador_id ?? null,
+      status: dados.status ?? 'proposta',
+      data_proposta: dados.data_proposta ?? agora.slice(0, 10),
+      data_assinatura: dados.data_assinatura ?? null,
+      data_conclusao: dados.data_conclusao ?? null,
+      motivo_cancelamento: dados.motivo_cancelamento ?? null,
+      observacoes: dados.observacoes ?? null,
+      criado_por: usuario.id,
+      criado_em: agora,
+      atualizado_em: agora,
+    });
+
+    if (nova.status === 'concluida') aoConcluir(base, nova);
+
+    base.vendas.push(nova);
+
+    // Parcelas sugeridas, como faz a ação real ao criar o negócio.
+    if (nova.comissao_bruta > 0) {
+      const sinal = arredondar(nova.comissao_bruta * 0.3);
+      const somarDias = (dias: number) => {
+        const d = new Date(nova.data_proposta);
+        d.setDate(d.getDate() + dias);
+        return d.toISOString().slice(0, 10);
+      };
+
+      const parcelas =
+        nova.forma_pagamento === 'a_vista'
+          ? [{ descricao: 'Comissão integral', valor: nova.comissao_bruta, vencimento: somarDias(7) }]
+          : [
+              { descricao: 'Sinal na assinatura', valor: sinal, vencimento: somarDias(5) },
+              {
+                descricao: 'Saldo na liberação do recurso',
+                valor: arredondar(nova.comissao_bruta - sinal),
+                vencimento: somarDias(45),
+              },
+            ];
+
+      for (const p of parcelas) {
+        base.parcelas.push({
+          id: novoId(),
+          venda_id: nova.id,
+          descricao: p.descricao,
+          beneficiario_id: null,
+          destino: 'casa',
+          valor: p.valor,
+          vencimento: p.vencimento,
+          pago_em: null,
+          status: 'pendente',
+          observacoes: null,
+          criado_em: agora,
+        });
+      }
+    }
+
+    return { ok: true, codigo: nova.codigo };
+  });
+}
+
+export function statusVendaDemo(
+  usuario: Perfil,
+  id: string,
+  status: string,
+  motivo?: string,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const venda = base.vendas.find((v) => v.id === id);
+    if (!venda) return { ok: false, erro: 'Negócio não encontrado.' };
+
+    const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+    if (!gestor && venda.consultor_id !== usuario.id) {
+      return { ok: false, erro: 'Este negócio é de outro consultor.' };
+    }
+
+    venda.status = status as Venda['status'];
+    if (motivo) venda.motivo_cancelamento = motivo;
+    venda.atualizado_em = new Date().toISOString();
+
+    if (status === 'concluida') aoConcluir(base, venda);
+
+    return { ok: true };
+  });
+}
+
+export function baixarParcelaDemo(id: string, pago: boolean): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const parcela = base.parcelas.find((p) => p.id === id);
+    if (!parcela) return { ok: false, erro: 'Parcela não encontrada.' };
+
+    parcela.status = pago ? 'pago' : 'pendente';
+    parcela.pago_em = pago ? new Date().toISOString().slice(0, 10) : null;
+    return { ok: true };
+  });
+}
+
+// ------------------------------------------------------------
+// LEADS
+// ------------------------------------------------------------
+
+/** Aplica o mesmo recorte do RLS: gestão vê tudo, corretor vê os seus. */
+export function leadsDemo(usuario: Perfil, incluirArquivados = false): Lead[] {
+  const base = lerBase();
+  const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+
+  return base.leads
+    .filter((l) => incluirArquivados || !l.arquivado)
+    .filter((l) => gestor || l.corretor_id === usuario.id || l.corretor_id === null)
+    .sort((a, b) => b.score - a.score);
+}
+
+export function moverLeadDemo(id: string, etapa: string): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const lead = base.leads.find((l) => l.id === id);
+    if (!lead) return { ok: false, erro: 'Lead não encontrado.' };
+
+    lead.etapa = etapa as Lead['etapa'];
+    lead.atualizado_em = new Date().toISOString();
+    return { ok: true };
+  });
+}
+
+export function assumirLeadDemo(usuario: Perfil, id: string): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const lead = base.leads.find((l) => l.id === id);
+    if (!lead) return { ok: false, erro: 'Lead não encontrado.' };
+    if (lead.corretor_id) return { ok: false, erro: 'Este lead já tem responsável.' };
+
+    lead.corretor_id = usuario.id;
+    lead.atualizado_em = new Date().toISOString();
+    return { ok: true };
+  });
+}
+
+export function salvarLeadDemo(
+  usuario: Perfil,
+  dados: Partial<Lead> & { id?: string },
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const agora = new Date().toISOString();
+
+    if (dados.id) {
+      const indice = base.leads.findIndex((l) => l.id === dados.id);
+      if (indice < 0) return { ok: false, erro: 'Lead não encontrado.' };
+      base.leads[indice] = { ...base.leads[indice], ...dados, atualizado_em: agora } as Lead;
+      return { ok: true };
+    }
+
+    base.leads.push({
+      id: novoId(),
+      nome: dados.nome ?? '',
+      telefone: dados.telefone ?? null,
+      email: dados.email ?? null,
+      mensagem: dados.mensagem ?? null,
+      origem: dados.origem ?? 'manual',
+      etapa: dados.etapa ?? 'novo',
+      temperatura: dados.temperatura ?? 'morno',
+      score: dados.score ?? 50,
+      imovel_id: dados.imovel_id ?? null,
+      imovel_titulo: dados.imovel_titulo ?? null,
+      valor: dados.valor ?? 0,
+      corretor_id: dados.corretor_id ?? usuario.id,
+      consentimento_lgpd: true,
+      consentimento_em: agora,
+      utm_source: null,
+      utm_medium: null,
+      utm_campaign: null,
+      utm_term: null,
+      utm_content: null,
+      pagina_origem: null,
+      arquivado: false,
+      motivo_perda: null,
+      proximo_contato: dados.proximo_contato ?? null,
+      criado_em: agora,
+      atualizado_em: agora,
+    });
+
+    return { ok: true };
+  });
+}
+
+// ------------------------------------------------------------
+// IMÓVEIS
+// ------------------------------------------------------------
+
+export function imoveisDemo(): Imovel[] {
+  return [...lerBase().imoveis].sort((a, b) => b.atualizado_em.localeCompare(a.atualizado_em));
+}
+
+export function alterarImovelDemo(
+  usuario: Perfil,
+  id: string,
+  mudancas: Partial<Imovel>,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const imovel = base.imoveis.find((i) => i.id === id);
+    if (!imovel) return { ok: false, erro: 'Imóvel não encontrado.' };
+
+    const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+    if (!gestor && imovel.corretor_id !== usuario.id) {
+      return {
+        ok: false,
+        erro: 'Este imóvel está na carteira de outro consultor. Só ele ou a gestão pode alterá-lo.',
+      };
+    }
+
+    Object.assign(imovel, mudancas, { atualizado_em: new Date().toISOString() });
+    return { ok: true };
+  });
+}
+
+export function contarImoveisDemo() {
+  const imoveis = lerBase().imoveis;
+  return {
+    total: imoveis.length,
+    publicados: imoveis.filter((i) => i.publicado).length,
+    reservados: imoveis.filter((i) => i.status === 'reservado').length,
+  };
+}
+
+// ------------------------------------------------------------
+// IMÓVEIS: CADASTRO, EDIÇÃO E EXCLUSÃO
+// ------------------------------------------------------------
+
+/**
+ * Grava um imóvel novo ou altera um existente.
+ *
+ * O `proprietario_id` chega obrigatório da ação, e é conferido aqui
+ * também. Repetir a checagem não é desconfiança do código que chama: é
+ * que esta função é o único ponto por onde imóvel entra na base da
+ * demonstração, e uma regra que vale sempre pertence ao lugar por onde
+ * tudo passa, não a cada chamador que precisa lembrar dela.
+ */
+export function salvarImovelDemo(
+  usuario: Perfil,
+  dados: Partial<Imovel> & { id?: string },
+): { ok: boolean; erro?: string; id?: string } {
+  return alterarBase((base) => {
+    const agora = new Date().toISOString();
+    const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+
+    if (!dados.proprietario_id) {
+      return { ok: false, erro: 'Todo imóvel precisa de um proprietário vinculado.' };
+    }
+    if (!base.proprietarios.some((p) => p.id === dados.proprietario_id)) {
+      return { ok: false, erro: 'Proprietário não encontrado. Cadastre-o antes.' };
+    }
+
+    if (dados.id) {
+      const indice = base.imoveis.findIndex((i) => i.id === dados.id);
+      if (indice < 0) return { ok: false, erro: 'Imóvel não encontrado.' };
+
+      const atual = base.imoveis[indice];
+      if (!gestor && atual.corretor_id !== usuario.id) {
+        return {
+          ok: false,
+          erro: 'Este imóvel está na carteira de outro consultor. Só ele ou a gestão pode alterá-lo.',
+        };
+      }
+
+      base.imoveis[indice] = { ...atual, ...dados, atualizado_em: agora } as Imovel;
+      return { ok: true, id: atual.id };
+    }
+
+    const id = novoId();
+    const titulo = dados.titulo ?? 'Imóvel sem título';
+
+    base.imoveis.push({
+      id,
+      codigo: proximoCodigo('BST', base.imoveis),
+      // O sufixo com o id curto evita colisão de slug entre dois
+      // imóveis de mesmo título, que no alto padrão acontece muito:
+      // duas unidades do mesmo andar do mesmo prédio.
+      slug: `${slugify(titulo)}-${id.slice(0, 6)}`,
+
+      titulo,
+      descricao: dados.descricao ?? null,
+      tipo: dados.tipo ?? 'Apartamento',
+      finalidade: dados.finalidade ?? 'venda',
+      status: dados.status ?? 'disponivel',
+
+      cep: dados.cep ?? null,
+      logradouro: dados.logradouro ?? null,
+      numero: dados.numero ?? null,
+      complemento: dados.complemento ?? null,
+      bairro: dados.bairro ?? null,
+      cidade: dados.cidade ?? 'Uberlândia',
+      uf: dados.uf ?? 'MG',
+      latitude: null,
+      longitude: null,
+      exibir_endereco: dados.exibir_endereco ?? false,
+
+      valor: dados.valor ?? 0,
+      valor_locacao: dados.valor_locacao ?? null,
+      valor_condominio: dados.valor_condominio ?? null,
+      valor_iptu: dados.valor_iptu ?? null,
+      aceita_permuta: dados.aceita_permuta ?? false,
+      aceita_financiamento: dados.aceita_financiamento ?? true,
+
+      area_util: dados.area_util ?? 0,
+      area_total: dados.area_total ?? 0,
+      hectares: dados.hectares ?? null,
+      quartos: dados.quartos ?? 0,
+      suites: dados.suites ?? 0,
+      banheiros: dados.banheiros ?? 0,
+      vagas: dados.vagas ?? 0,
+      ano_construcao: dados.ano_construcao ?? null,
+      andar: dados.andar ?? null,
+      mobiliado: dados.mobiliado ?? false,
+      caracteristicas: dados.caracteristicas ?? [],
+
+      condominio_id: dados.condominio_id ?? null,
+      condominio_nome: dados.condominio_nome ?? null,
+
+      referencia_externa: null,
+      fonte: 'manual',
+      importado_em: null,
+
+      proprietario_id: dados.proprietario_id,
+      // Corretor cadastra em nome próprio; a gestão escolhe de quem é.
+      corretor_id: gestor ? (dados.corretor_id ?? null) : usuario.id,
+      exclusividade: dados.exclusividade ?? false,
+      autorizacao_ate: dados.autorizacao_ate ?? null,
+      matricula: dados.matricula ?? null,
+      observacoes_internas: dados.observacoes_internas ?? null,
+
+      // Nasce fora do ar. Publicar é um segundo gesto, deliberado:
+      // imóvel recém-cadastrado ainda não tem foto nem revisão de
+      // texto, e mandá-lo direto para a vitrine é como deixar a
+      // vitrine aberta durante a arrumação.
+      publicado: false,
+      destaque: false,
+      publicar_portais: false,
+      cover: dados.cover ?? `cv${1 + (base.imoveis.length % 6)}`,
+      visualizacoes: 0,
+
+      meta_titulo: null,
+      meta_descricao: null,
+
+      criado_em: agora,
+      atualizado_em: agora,
+    });
+
+    return { ok: true, id };
+  });
+}
+
+/**
+ * Exclusão definitiva do imóvel.
+ *
+ * Some junto o que só existia por causa dele: os compromissos de
+ * visita e o vínculo dos leads. O lead em si fica — a pessoa continua
+ * procurando, só que agora sem aquele imóvel — e a venda concluída
+ * também, porque a comissão daquele mês aconteceu e não desaparece
+ * porque o registro do imóvel saiu.
+ */
+export function excluirImovelDemo(usuario: Perfil, id: string): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const imovel = base.imoveis.find((i) => i.id === id);
+    if (!imovel) return { ok: false, erro: 'Imóvel não encontrado.' };
+
+    if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+      return { ok: false, erro: 'Apenas a gestão exclui um imóvel em definitivo.' };
+    }
+
+    const vendaAberta = base.vendas.find(
+      (v) => v.imovel_id === id && !['cancelada', 'concluida'].includes(v.status),
+    );
+    if (vendaAberta) {
+      return {
+        ok: false,
+        erro: `Existe uma negociação em andamento (${vendaAberta.codigo}) neste imóvel. Conclua ou cancele antes de excluir.`,
+      };
+    }
+
+    base.imoveis = base.imoveis.filter((i) => i.id !== id);
+    base.compromissos = base.compromissos.filter((c) => c.imovel_id !== id);
+
+    for (const lead of base.leads) {
+      if (lead.imovel_id === id) lead.imovel_id = null;
+    }
+
+    return { ok: true };
+  });
+}
+
+// ------------------------------------------------------------
+// PROPRIETÁRIOS
+// ------------------------------------------------------------
+
+/**
+ * A lista, já com a carteira de cada um contada.
+ *
+ * O recorte por papel espelha o RLS da migration 0003: a gestão vê
+ * todo mundo, e o corretor vê apenas os proprietários de imóveis que
+ * estão na própria carteira. É dado sensível — CPF, telefone
+ * particular, endereço residencial — e não há motivo para um consultor
+ * enxergar o proprietário de um imóvel que ele não atende.
+ */
+export function proprietariosDemo(usuario: Perfil): ProprietarioComCarteira[] {
+  const base = lerBase();
+  const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+
+  const meus = new Set(
+    base.imoveis.filter((i) => i.corretor_id === usuario.id).map((i) => i.proprietario_id),
+  );
+
+  return base.proprietarios
+    .filter((p) => gestor || meus.has(p.id))
+    .map((p) => ({
+      ...p,
+      ...resumirCarteira(base.imoveis.filter((i) => i.proprietario_id === p.id)),
+    }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+/** Só o par id/nome, para alimentar os seletores sem carregar o resto. */
+export function nomesProprietariosDemo(): Pick<Proprietario, 'id' | 'nome'>[] {
+  return lerBase()
+    .proprietarios.map((p) => ({ id: p.id, nome: p.nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+export function imoveisDoProprietarioDemo(id: string): Imovel[] {
+  return lerBase()
+    .imoveis.filter((i) => i.proprietario_id === id)
+    .sort((a, b) => b.atualizado_em.localeCompare(a.atualizado_em));
+}
+
+export function salvarProprietarioDemo(
+  usuario: Perfil,
+  dados: Partial<Proprietario> & { id?: string },
+): { ok: boolean; erro?: string; id?: string } {
+  return alterarBase((base) => {
+    const agora = new Date().toISOString();
+    const nome = (dados.nome ?? '').trim();
+
+    if (nome.length < 2) return { ok: false, erro: 'Informe o nome do proprietário.' };
+    if (!dados.telefone && !dados.email) {
+      return { ok: false, erro: 'Informe ao menos um telefone ou um e-mail de contato.' };
+    }
+
+    if (dados.id) {
+      const indice = base.proprietarios.findIndex((p) => p.id === dados.id);
+      if (indice < 0) return { ok: false, erro: 'Proprietário não encontrado.' };
+
+      base.proprietarios[indice] = {
+        ...base.proprietarios[indice],
+        ...dados,
+        nome,
+        atualizado_em: agora,
+      } as Proprietario;
+
+      return { ok: true, id: dados.id };
+    }
+
+    const id = novoId();
+
+    base.proprietarios.push({
+      id,
+      nome,
+      cpf_cnpj: dados.cpf_cnpj ?? null,
+      email: dados.email ?? null,
+      telefone: dados.telefone ?? null,
+      endereco: dados.endereco ?? null,
+      observacoes: dados.observacoes ?? null,
+      criado_por: usuario.id,
+      criado_em: agora,
+      atualizado_em: agora,
+    });
+
+    return { ok: true, id };
+  });
+}
+
+/**
+ * Excluir proprietário só quando ele não tem imóvel.
+ *
+ * A alternativa seria desvincular os imóveis e apagar mesmo assim, mas
+ * isso deixaria a carteira com registros órfãos — exatamente o estado
+ * que a obrigatoriedade do proprietário existe para evitar. Quem quer
+ * mesmo remover, primeiro transfere os imóveis.
+ */
+export function excluirProprietarioDemo(
+  usuario: Perfil,
+  id: string,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+      return { ok: false, erro: 'Apenas a gestão exclui um proprietário.' };
+    }
+
+    const vinculados = base.imoveis.filter((i) => i.proprietario_id === id);
+    if (vinculados.length > 0) {
+      return {
+        ok: false,
+        erro: `Este proprietário tem ${vinculados.length} ${
+          vinculados.length === 1 ? 'imóvel vinculado' : 'imóveis vinculados'
+        }. Transfira ou exclua antes.`,
+      };
+    }
+
+    const antes = base.proprietarios.length;
+    base.proprietarios = base.proprietarios.filter((p) => p.id !== id);
+
+    return antes === base.proprietarios.length
+      ? { ok: false, erro: 'Proprietário não encontrado.' }
+      : { ok: true };
+  });
+}
+
+// ------------------------------------------------------------
+// INTERAÇÕES DO LEAD
+// ------------------------------------------------------------
+
+/**
+ * A linha do tempo de um atendimento.
+ *
+ * Reproduz a policy "interacoes - ler" da migration 0003: quem não
+ * enxerga o lead também não enxerga o histórico dele. Sem isso a
+ * demonstração mostraria ao corretor a anotação que o colega fez sobre
+ * um cliente que não é dele.
+ */
+export function interacoesDemo(usuario: Perfil, leadId?: string): Interacao[] {
+  const base = lerBase();
+  const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+
+  const visiveis = new Set(
+    base.leads
+      .filter((l) => gestor || l.corretor_id === usuario.id || l.corretor_id === null)
+      .map((l) => l.id),
+  );
+
+  return base.interacoes
+    .filter((i) => visiveis.has(i.lead_id))
+    .filter((i) => !leadId || i.lead_id === leadId)
+    .sort((a, b) => b.criado_em.localeCompare(a.criado_em));
+}
+
+export function registrarInteracaoDemo(
+  usuario: Perfil,
+  leadId: string,
+  tipo: string,
+  conteudo: string,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const lead = base.leads.find((l) => l.id === leadId);
+    if (!lead) return { ok: false, erro: 'Lead não encontrado.' };
+
+    base.interacoes.push({
+      id: novoId(),
+      lead_id: leadId,
+      tipo: tipo as Interacao['tipo'],
+      conteudo,
+      autor_id: usuario.id,
+      autor_nome: usuario.nome,
+      criado_em: new Date().toISOString(),
+    });
+
+    // Registrar contato é sinal de vida do atendimento. Atualizar a data
+    // aqui é o que faz o lead sair da lista de parados sem ninguém
+    // precisar lembrar de mexer em outro campo.
+    lead.atualizado_em = new Date().toISOString();
+
+    return { ok: true };
+  });
+}
+
+export function excluirInteracaoDemo(usuario: Perfil, id: string): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const alvo = base.interacoes.find((i) => i.id === id);
+    if (!alvo) return { ok: false, erro: 'Registro não encontrado.' };
+
+    const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+    if (!gestor && alvo.autor_id !== usuario.id) {
+      return { ok: false, erro: 'Só o autor da anotação ou a gestão pode apagá-la.' };
+    }
+
+    base.interacoes = base.interacoes.filter((i) => i.id !== id);
+    return { ok: true };
+  });
+}
+
+// ------------------------------------------------------------
+// LEADS: TRANSFERÊNCIA, ARQUIVO E EXCLUSÃO
+// ------------------------------------------------------------
+
+/** Última interação de cada lead, para a lista não varrer o histórico por linha. */
+export function ultimoContatoDemo(usuario: Perfil): Record<string, string> {
+  const mapa: Record<string, string> = {};
+
+  for (const i of interacoesDemo(usuario)) {
+    if (!mapa[i.lead_id] || i.criado_em > mapa[i.lead_id]) mapa[i.lead_id] = i.criado_em;
+  }
+
+  return mapa;
+}
+
+export function transferirLeadDemo(
+  usuario: Perfil,
+  id: string,
+  destinoId: string | null,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const lead = base.leads.find((l) => l.id === id);
+    if (!lead) return { ok: false, erro: 'Lead não encontrado.' };
+
+    const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+    const meu = lead.corretor_id === usuario.id || lead.corretor_id === null;
+
+    if (!gestor && !meu) {
+      return { ok: false, erro: 'Este lead está na carteira de outro consultor.' };
+    }
+
+    if (destinoId) {
+      const destino = base.perfis.find((p) => p.id === destinoId);
+      if (!destino) return { ok: false, erro: 'Consultor não encontrado.' };
+      if (!destino.ativo) return { ok: false, erro: 'Este consultor está com o acesso desativado.' };
+    }
+
+    const anterior = lead.corretor_id
+      ? (base.perfis.find((p) => p.id === lead.corretor_id)?.nome ?? 'ninguém')
+      : 'ninguém';
+    const novo = destinoId
+      ? (base.perfis.find((p) => p.id === destinoId)?.nome ?? 'ninguém')
+      : 'ninguém';
+
+    lead.corretor_id = destinoId;
+    lead.atualizado_em = new Date().toISOString();
+
+    base.interacoes.push({
+      id: novoId(),
+      lead_id: id,
+      tipo: 'sistema',
+      conteudo: `Atendimento transferido de ${anterior} para ${novo}.`,
+      autor_id: usuario.id,
+      autor_nome: usuario.nome,
+      criado_em: new Date().toISOString(),
+    });
+
+    return { ok: true };
+  });
+}
+
+export function arquivarLeadDemo(
+  usuario: Perfil,
+  id: string,
+  motivo: string,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const lead = base.leads.find((l) => l.id === id);
+    if (!lead) return { ok: false, erro: 'Lead não encontrado.' };
+
+    const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+    if (!gestor && lead.corretor_id !== usuario.id && lead.corretor_id !== null) {
+      return { ok: false, erro: 'Este lead está na carteira de outro consultor.' };
+    }
+
+    lead.arquivado = true;
+    lead.etapa = 'perdido';
+    lead.motivo_perda = motivo;
+    lead.atualizado_em = new Date().toISOString();
+
+    base.interacoes.push({
+      id: novoId(),
+      lead_id: id,
+      tipo: 'sistema',
+      conteudo: `Atendimento arquivado. Motivo: ${motivo}.`,
+      autor_id: usuario.id,
+      autor_nome: usuario.nome,
+      criado_em: new Date().toISOString(),
+    });
+
+    return { ok: true };
+  });
+}
+
+/**
+ * Exclusão definitiva.
+ *
+ * Só a gestão, como na policy "leads - excluir". A diferença entre isto
+ * e arquivar não é de conveniência: arquivar preserva o histórico do
+ * atendimento para o relatório, excluir apaga a pessoa do sistema, que
+ * é o que a LGPD exige quando o titular pede a remoção dos dados.
+ */
+export function excluirLeadDemo(usuario: Perfil, id: string): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+      return { ok: false, erro: 'Apenas a gestão exclui um lead em definitivo.' };
+    }
+
+    const existe = base.leads.some((l) => l.id === id);
+    if (!existe) return { ok: false, erro: 'Lead não encontrado.' };
+
+    base.leads = base.leads.filter((l) => l.id !== id);
+    base.interacoes = base.interacoes.filter((i) => i.lead_id !== id);
+
+    // O vínculo com o negócio é desfeito, não apagado: a venda continua
+    // existindo na contabilidade mesmo sem o lead de origem.
+    for (const venda of base.vendas) {
+      if (venda.lead_id === id) venda.lead_id = null;
+    }
+    for (const compromisso of base.compromissos) {
+      if (compromisso.lead_id === id) compromisso.lead_id = null;
+    }
+
+    return { ok: true };
+  });
+}
+
+// ------------------------------------------------------------
+// EQUIPE
+// ------------------------------------------------------------
+
+export function equipeCompletaDemo(): Perfil[] {
+  return [...lerBase().perfis].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+/** Quanto cada pessoa carrega hoje. Mostrado antes de desativar ou remover. */
+export function carteiraDemo(id: string): { leads: number; imoveis: number; negocios: number } {
+  const base = lerBase();
+
+  return {
+    leads: base.leads.filter((l) => l.corretor_id === id && !l.arquivado).length,
+    imoveis: base.imoveis.filter((i) => i.corretor_id === id).length,
+    negocios: base.vendas.filter(
+      (v) => v.consultor_id === id && !['concluida', 'cancelada'].includes(v.status),
+    ).length,
+  };
+}
+
+export function salvarPessoaDemo(
+  usuario: Perfil,
+  dados: Partial<Perfil> & { id?: string },
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const agora = new Date().toISOString();
+
+    if (dados.id) {
+      const alvo = base.perfis.find((p) => p.id === dados.id);
+      if (!alvo) return { ok: false, erro: 'Pessoa não encontrada.' };
+
+      // Dados de contato: o admin edita de qualquer um, e cada pessoa
+      // edita os próprios. Papel e permissão não passam por aqui.
+      if (usuario.papel !== 'admin' && usuario.id !== alvo.id) {
+        return { ok: false, erro: 'Apenas o administrador edita os dados de outra pessoa.' };
+      }
+
+      alvo.nome = dados.nome ?? alvo.nome;
+      alvo.email = dados.email ?? alvo.email;
+      alvo.telefone = dados.telefone ?? alvo.telefone;
+      alvo.creci = dados.creci ?? alvo.creci;
+      alvo.atualizado_em = agora;
+
+      return { ok: true };
+    }
+
+    if (usuario.papel !== 'admin') {
+      return { ok: false, erro: 'Apenas o administrador cadastra novos integrantes.' };
+    }
+
+    const email = String(dados.email ?? '').toLowerCase();
+    if (base.perfis.some((p) => (p.email ?? '').toLowerCase() === email)) {
+      return { ok: false, erro: 'Já existe alguém na equipe com este e-mail.' };
+    }
+
+    base.perfis.push({
+      id: novoId(),
+      nome: dados.nome ?? 'Novo integrante',
+      email: dados.email ?? null,
+      telefone: dados.telefone ?? null,
+      creci: dados.creci ?? null,
+      avatar_url: null,
+      papel: dados.papel ?? 'corretor',
+      permissoes: dados.permissoes ?? permissoesPadrao(dados.papel ?? 'corretor'),
+      meta_mensal: dados.meta_mensal ?? 0,
+      ativo: true,
+      criado_em: agora,
+      atualizado_em: agora,
+    });
+
+    return { ok: true };
+  });
+}
+
+/**
+ * Mesma trava da função definir_acesso() do banco (migration 0003):
+ * papel, permissões e situação de acesso só mudam por ato de
+ * administrador, e nunca sobre a própria conta.
+ */
+export function definirAcessoDemo(
+  usuario: Perfil,
+  alvoId: string,
+  mudancas: { papel?: Perfil['papel']; permissoes?: Perfil['permissoes']; ativo?: boolean; meta_mensal?: number },
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    const validacao = validarAlteracaoAcesso(usuario, alvoId, mudancas, base.perfis);
+    if (!validacao.ok) return { ok: false, erro: validacao.erro };
+
+    const alvo = base.perfis.find((p) => p.id === alvoId);
+    if (!alvo) return { ok: false, erro: 'Pessoa não encontrada.' };
+
+    if (mudancas.papel !== undefined) alvo.papel = mudancas.papel;
+    if (mudancas.permissoes !== undefined) alvo.permissoes = mudancas.permissoes;
+    if (mudancas.ativo !== undefined) alvo.ativo = mudancas.ativo;
+    if (mudancas.meta_mensal !== undefined) alvo.meta_mensal = mudancas.meta_mensal;
+
+    alvo.atualizado_em = new Date().toISOString();
+    return { ok: true };
+  });
+}
+
+/**
+ * Remove alguém da equipe.
+ *
+ * Exige informar quem recebe a carteira quando ainda existe algo no nome
+ * da pessoa. Apagar direto deixaria leads sem responsável e imóveis sem
+ * captador, e a operação descobriria isso no pior momento possível, que
+ * é quando o cliente liga.
+ */
+export function removerPessoaDemo(
+  usuario: Perfil,
+  alvoId: string,
+  substitutoId: string | null,
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    if (usuario.papel !== 'admin') {
+      return { ok: false, erro: 'Apenas o administrador remove integrantes.' };
+    }
+    if (alvoId === usuario.id) {
+      return { ok: false, erro: 'Você não pode remover o próprio acesso.' };
+    }
+
+    const alvo = base.perfis.find((p) => p.id === alvoId);
+    if (!alvo) return { ok: false, erro: 'Pessoa não encontrada.' };
+
+    const admins = base.perfis.filter((p) => p.papel === 'admin' && p.ativo);
+    if (alvo.papel === 'admin' && admins.length <= 1) {
+      return { ok: false, erro: 'A imobiliária ficaria sem nenhum administrador ativo.' };
+    }
+
+    const carteira = {
+      leads: base.leads.filter((l) => l.corretor_id === alvoId && !l.arquivado).length,
+      imoveis: base.imoveis.filter((i) => i.corretor_id === alvoId).length,
+      negocios: base.vendas.filter(
+        (v) => v.consultor_id === alvoId && !['concluida', 'cancelada'].includes(v.status),
+      ).length,
+    };
+
+    const temCarteira = carteira.leads + carteira.imoveis + carteira.negocios > 0;
+
+    if (temCarteira && !substitutoId) {
+      return {
+        ok: false,
+        erro: `Esta pessoa ainda responde por ${carteira.leads} leads, ${carteira.imoveis} imóveis e ${carteira.negocios} negócios em aberto. Escolha quem assume antes de remover.`,
+      };
+    }
+
+    if (substitutoId) {
+      const substituto = base.perfis.find((p) => p.id === substitutoId && p.ativo);
+      if (!substituto) return { ok: false, erro: 'Quem assume precisa ser alguém ativo na equipe.' };
+
+      for (const lead of base.leads) if (lead.corretor_id === alvoId) lead.corretor_id = substitutoId;
+      for (const imovel of base.imoveis) if (imovel.corretor_id === alvoId) imovel.corretor_id = substitutoId;
+      for (const venda of base.vendas) {
+        if (venda.consultor_id === alvoId && !['concluida', 'cancelada'].includes(venda.status)) {
+          venda.consultor_id = substitutoId;
+        }
+      }
+      for (const c of base.compromissos) {
+        if (c.responsavel_id === alvoId && c.status !== 'concluido') c.responsavel_id = substitutoId;
+      }
+    }
+
+    base.perfis = base.perfis.filter((p) => p.id !== alvoId);
+    return { ok: true };
+  });
+}
+
+// ------------------------------------------------------------
+// INDICADORES
+// ------------------------------------------------------------
+
+/** Tudo que o cálculo de indicadores precisa, em uma leitura só. */
+export function baseIndicadoresDemo(): BaseIndicadores {
+  const base = lerBase();
+
+  return {
+    perfis: base.perfis,
+    imoveis: base.imoveis,
+    leads: base.leads,
+    interacoes: base.interacoes,
+    compromissos: base.compromissos,
+    vendas: base.vendas,
+  };
+}
+
+export function parcelasVencidasDemo(): number {
+  const hoje = new Date().toISOString().slice(0, 10);
+  return lerBase().parcelas.filter((p) => p.status === 'pendente' && p.vencimento < hoje).length;
+}

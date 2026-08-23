@@ -1,0 +1,41 @@
+# ============================================================
+# SITE PUBLICO - boostimoveis.com.br
+# ============================================================
+# Este arquivo fica DENTRO de apps/site de proposito.
+#
+# No painel do Netlify, configure este site assim:
+#   Base directory     -> deixe VAZIO
+#   Package directory  -> apps/site
+#
+# Com isso o npm install roda na raiz do repositorio (e enxerga os
+# workspaces @boost/core e @boost/db) enquanto a configuracao do site
+# vem daqui. Se voce apontar o Base directory para apps/site, o install
+# roda dentro da pasta, nao encontra os pacotes internos e o build quebra.
+#
+# A pasta de publicacao nao e declarada: o runtime de Next.js do Netlify
+# detecta sozinho e configura as funcoes de renderizacao no servidor.
+# ============================================================
+
+[build]
+  command = "npm run build:site"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # O build do Next com os pacotes do monorepo passa do heap padrao
+  # do Node em maquinas menores. Reservar 4 GB evita a falha
+  # intermitente de alocacao durante a compilacao.
+  NODE_OPTIONS = "--max-old-space-size=4096"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+# As fotos dos imoveis mudam pouco. Cache longo no CDN economiza banda
+# e deixa a listagem instantanea na segunda visita.
+[[headers]]
+  for = "/_next/image*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
