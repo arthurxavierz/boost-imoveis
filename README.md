@@ -63,10 +63,19 @@ supabase/migrations/0008_gestao.sql      administração de equipe e origem de l
 supabase/migrations/0009_vitrine.sql     condomínios, importação por XML e índices de escala
 supabase/migrations/0010_proprietarios.sql  proprietário obrigatório, índices e view de carteira
 supabase/seed.sql                        imóveis de exemplo (opcional)
+supabase/conferir.sql                    confere se tudo entrou; não altera nada
 ```
+
+Rode **um arquivo por vez**. O SQL Editor executa tudo numa transação: se
+você colar os dez juntos e o sétimo falhar, os seis anteriores voltam atrás
+e fica difícil saber onde o banco parou.
 
 Não pule o `0003`. Sem ele, o banco fica aberto: qualquer pessoa com a chave
 pública conseguiria ler dados de proprietários e comissões.
+
+Ao final, rode `supabase/conferir.sql`. Ele não altera nada: devolve seis
+linhas dizendo o que entrou e o que faltou. É a diferença entre descobrir
+uma migration incompleta agora ou daqui a três semanas.
 
 ### 3. Variáveis de ambiente
 
