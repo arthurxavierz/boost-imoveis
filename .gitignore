@@ -43,3 +43,7 @@ apps/*/public/assets/
 *.xlsx
 *.csv
 /xmls*.txt
+
+# Cache incremental do TypeScript. É artefato de máquina: muda a cada
+# compilação e gera conflito em toda troca de branch.
+*.tsbuildinfo
