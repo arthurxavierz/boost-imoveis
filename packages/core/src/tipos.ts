@@ -238,7 +238,7 @@ export interface Foto {
 
 export type OrigemLead =
   | 'site' | 'vitrine' | 'whatsapp' | 'portal' | 'indicacao' | 'instagram' | 'telefone'
-  | 'presencial' | 'manual';
+  | 'presencial' | 'prospeccao' | 'manual';
 
 export type EtapaLead = 'novo' | 'contato' | 'visita' | 'proposta' | 'fechado' | 'perdido';
 

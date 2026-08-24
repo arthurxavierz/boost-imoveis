@@ -168,6 +168,7 @@ function rotuloOrigem(origem: OrigemLead): string {
     indicacao: 'indicação',
     instagram: 'Instagram',
     telefone: 'telefone',
+    prospeccao: 'prospecção ativa',
     presencial: 'atendimento presencial',
     manual: 'cadastro manual',
   };

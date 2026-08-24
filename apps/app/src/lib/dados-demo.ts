@@ -17,13 +17,20 @@ import type {
   Interacao,
   Lead,
   Perfil,
+  Prospecto,
   Proprietario,
   ProprietarioComCarteira,
   Venda,
   VendaDetalhada,
   VendaParcela,
 } from '@boost/core';
-import { permissoesPadrao, resumirCarteira, slugify, validarAlteracaoAcesso } from '@boost/core';
+import {
+  permissoesPadrao,
+  pontuarProspecto,
+  resumirCarteira,
+  slugify,
+  validarAlteracaoAcesso,
+} from '@boost/core';
 import { alterarBase, lerBase, novoId, proximoCodigo } from '@boost/demo';
 
 function nomes(): Map<string, string> {
@@ -1177,4 +1184,66 @@ export function baseIndicadoresDemo(): BaseIndicadores {
 export function parcelasVencidasDemo(): number {
   const hoje = new Date().toISOString().slice(0, 10);
   return lerBase().parcelas.filter((p) => p.status === 'pendente' && p.vencimento < hoje).length;
+}
+
+// ------------------------------------------------------------
+// PROSPECÇÃO
+// ------------------------------------------------------------
+
+/**
+ * Resultados simulados da busca por empresas.
+ *
+ * Existe para a tela de prospecção poder ser avaliada antes de alguém
+ * cadastrar a chave do Google e começar a pagar por chamada. Os
+ * números são construídos a partir do termo buscado, então a mesma
+ * busca devolve sempre o mesmo resultado — o que permite conferir se o
+ * filtro e a ordenação funcionam.
+ *
+ * A pontuação passa pela mesma pontuarProspecto() da busca real. Se a
+ * regra de score mudar, a demonstração muda junto, e nunca mostra uma
+ * ordem que a produção não reproduziria.
+ */
+export function prospectosDemo(segmento: string, cidade: string, limite: number): Prospecto[] {
+  const modelos = [
+    { sufixo: 'Centro Clínico', tipo: 'clinic', nota: 4.7, avaliacoes: 412, site: true, tel: true },
+    { sufixo: 'Unidade Norte', tipo: 'gym', nota: 4.5, avaliacoes: 268, site: true, tel: true },
+    { sufixo: 'Matriz', tipo: 'restaurant', nota: 4.2, avaliacoes: 1340, site: false, tel: true },
+    { sufixo: 'Jardim Karaíba', tipo: 'dental_clinic', nota: 4.9, avaliacoes: 96, site: true, tel: true },
+    { sufixo: 'Santa Mônica', tipo: 'veterinary_care', nota: 4.4, avaliacoes: 154, site: false, tel: true },
+    { sufixo: 'Filial Tibery', tipo: 'store', nota: 3.9, avaliacoes: 47, site: false, tel: true },
+    { sufixo: 'Sede', tipo: 'lawyer', nota: 4.8, avaliacoes: 63, site: true, tel: true },
+    { sufixo: 'Unidade Umuarama', tipo: 'school', nota: 4.6, avaliacoes: 221, site: true, tel: false },
+    { sufixo: 'Alto Padrão', tipo: 'beauty_salon', nota: 4.3, avaliacoes: 388, site: false, tel: true },
+    { sufixo: 'Express', tipo: 'bakery', nota: 4.1, avaliacoes: 512, site: false, tel: true },
+    { sufixo: 'Corporate', tipo: 'accounting', nota: 4.5, avaliacoes: 29, site: true, tel: true },
+    { sufixo: 'Praça Tubal Vilela', tipo: 'cafe', nota: 4.6, avaliacoes: 743, site: false, tel: true },
+  ];
+
+  const raiz = segmento.trim().replace(/s$/, '').replace(/^\w/, (c) => c.toUpperCase()) || 'Empresa';
+
+  // Ordena igual a busca real. Sem isto a demonstracao mostraria a
+  // lista na ordem em que foi escrita, e quem avaliasse a tela
+  // aprenderia um comportamento que a producao nao repete.
+  return modelos.slice(0, Math.min(limite, modelos.length)).map((m, i) => {
+    const base = {
+      id: `demo_${i + 1}`,
+      origem_id: `demo_${i + 1}`,
+      nome: `${raiz} ${m.sufixo}`,
+      categoria: m.tipo.replace(/_/g, ' '),
+      endereco: `Av. Rondon Pacheco, ${1200 + i * 137} - ${cidade}`,
+      telefone: m.tel ? `3499${String(8000000 + i * 4321).slice(0, 7)}` : '',
+      site: m.site ? `https://exemplo${i + 1}.com.br` : '',
+      latitude: -18.9186 + i * 0.004,
+      longitude: -48.2772 + i * 0.006,
+      distancia_km: Number((0.8 + i * 1.4).toFixed(1)),
+      mapa_url: 'https://www.google.com/maps',
+      nota: m.nota,
+      avaliacoes: m.avaliacoes,
+      situacao: 'OPERATIONAL',
+      tipos: [m.tipo],
+    };
+
+    return { ...base, ...pontuarProspecto(base) };
+  })
+  .sort((a, b) => b.score - a.score || b.avaliacoes - a.avaliacoes);
 }

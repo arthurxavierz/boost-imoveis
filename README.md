@@ -62,6 +62,7 @@ supabase/migrations/0007_vendas.sql      vendas, comissão e margem
 supabase/migrations/0008_gestao.sql      administração de equipe e origem de lead
 supabase/migrations/0009_vitrine.sql     condomínios, importação por XML e índices de escala
 supabase/migrations/0010_proprietarios.sql  proprietário obrigatório, índices e view de carteira
+supabase/migrations/0011_prospeccao.sql  origem de lead "prospecção" e índices
 supabase/seed.sql                        imóveis de exemplo (opcional)
 supabase/conferir.sql                    confere se tudo entrou; não altera nada
 ```
@@ -222,6 +223,19 @@ logo. Um original só, copiado para o `public/` de cada app pelo
 de cada `build`. O símbolo é pintado por máscara CSS, não por um SVG
 colorido: o mesmo arquivo sai ouro no site e branco no painel, e não
 viram dois arquivos que um dia divergem.
+
+**A prospecção não guarda o que achou.** A tela busca empresas no Google
+Places e mostra o resultado, mas nada disso vai para o banco. O resultado
+é refazível pela mesma consulta a qualquer momento, e guardá-lo criaria
+uma segunda lista de contatos para manter em dia ao lado do funil — com o
+risco clássico de as duas discordarem sobre quem já foi abordado. O que se
+guarda é a decisão de abordar, e ela vira lead, com dono e histórico.
+
+O score dali não é o mesmo do Achilles Command, de onde a ideia veio. Lá
+ele responde "esta empresa precisa de site?"; aqui, "esta empresa é
+candidata a um imóvel comercial?". Os sinais pesam ao contrário: empresa
+grande e bem posicionada é cliente ruim para quem vende site e ótimo
+candidato a sala maior.
 
 **Concluir uma venda tem efeito em cascata.** O imóvel sai da vitrine, o lead vai
 para "fechado" e a comissão entra no caixa. É um gatilho no banco, não uma

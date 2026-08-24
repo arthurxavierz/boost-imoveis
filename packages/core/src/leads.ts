@@ -81,6 +81,14 @@ export const ORIGENS_LEAD: DescricaoOrigem[] = [
     automatica: true,
   },
   {
+    chave: 'prospeccao',
+    rotulo: 'Prospecção ativa',
+    explicacao:
+      'A casa foi atrás. Saiu de uma busca por segmento e cidade na tela de Prospecção, e não de alguém que procurou a Boost.',
+    cor: 'roxo',
+    automatica: false,
+  },
+  {
     chave: 'manual',
     rotulo: 'Inclusão manual',
     explicacao: 'Cadastrado pela equipe, sem canal de entrada definido.',

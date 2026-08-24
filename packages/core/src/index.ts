@@ -8,3 +8,4 @@ export * from './equipe';
 export * from './indicadores';
 export * from './vitrine';
 export * from './carteira';
+export * from './prospeccao';

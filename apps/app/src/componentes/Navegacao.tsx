@@ -9,6 +9,7 @@ import { iniciais, type Perfil } from '@boost/core';
 import { supabaseNavegador } from '@/lib/supabase-navegador';
 import {
   IconeAgenda,
+  IconeAlvo,
   IconeChave,
   IconeEquipe,
   IconeFechar,
@@ -41,6 +42,14 @@ const MENU: ItemMenu[] = [
     rotulo: 'Leads',
     curto: 'Leads',
     Icone: IconeFunil,
+    area: 'leads',
+    grupo: 'Operação',
+  },
+  {
+    href: '/prospeccao',
+    rotulo: 'Prospecção',
+    curto: 'Prospectar',
+    Icone: IconeAlvo,
     area: 'leads',
     grupo: 'Operação',
   },
