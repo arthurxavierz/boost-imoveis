@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Fraunces, Inter } from 'next/font/google';
+import { Outfit } from 'next/font/google';
 
 import { BarraProgresso } from '@/componentes/BarraProgresso';
 import { Cabecalho } from '@/componentes/Cabecalho';
@@ -12,25 +12,29 @@ import { jsonLdImobiliaria } from '@/lib/seo';
 import './globals.css';
 
 /**
- * Fraunces nos titulos e Inter no texto.
+ * Uma familia so: Outfit, do peso 200 ao 700.
  *
- * Fraunces e uma serifada com eixo optico: em corpo grande ela fica
- * elegante e com contraste alto, e em corpo pequeno engrossa sozinha
- * para nao sumir. E o que da ao site o ar editorial de revista de
- * arquitetura, em vez do visual de portal de classificados.
+ * A escolha vem do proprio simbolo da marca. O "B" da Boost e
+ * geometrico — circulos e retas, sem modulacao — e o logotipo por
+ * extenso e uma sans geometrica. Uma serifada nos titulos brigava com
+ * isso: a pagina dizia "editorial classico" no cabecalho e "moderno
+ * geometrico" na assinatura, e nenhuma das duas vencia.
+ *
+ * O que estava aqui antes, Fraunces com Inter, tem outro problema: sao
+ * o par que toda pagina gerada por IA usa. Quem ve muitas dessas
+ * paginas reconhece na primeira olhada, e foi exatamente esse o
+ * incomodo relatado.
+ *
+ * Sem serifada, a hierarquia passa a vir de peso, corpo e entreletra,
+ * que e como marca de luxo moderna resolve: o titulo e leve e grande
+ * com tracking negativo, o rotulo e pequeno e espacado. O contraste
+ * entre esses dois extremos da a mesma tensao que a serifada dava, sem
+ * a contradicao com o simbolo.
  */
-const serif = Fraunces({
+const outfit = Outfit({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  style: ['normal', 'italic'],
-  variable: '--f-serif',
-  display: 'swap',
-});
-
-const sans = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--f-sans',
+  weight: ['200', '300', '400', '500', '600', '700'],
+  variable: '--f-marca',
   display: 'swap',
 });
 
@@ -91,7 +95,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${serif.variable} ${sans.variable}`}>
+    <html lang="pt-BR" className={outfit.variable}>
       <body>
         {/* Identifica a imobiliaria para o Google. E o que habilita o
             painel de negocio local na busca e no Maps. */}
@@ -99,6 +103,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdImobiliaria()) }}
         />
+
+        {/* Fica antes de tudo no DOM mas cobre tudo pelo z-index, e
+            nao intercepta toque. Ver .grao no globals.css. */}
+        <div className="grao" aria-hidden="true" />
 
         <BarraProgresso />
         <Cabecalho />

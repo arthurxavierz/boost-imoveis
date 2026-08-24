@@ -143,8 +143,8 @@ export function Navegacao({ usuario }: { usuario: Perfil }) {
         <div className="lateral-marca">
           <span className="selo" aria-hidden="true" />
           <div style={{ minWidth: 0 }}>
-            <strong>Boost</strong>
-            <span>Gestão</span>
+            <strong>boost</strong>
+            <span>gestão</span>
           </div>
           <button
             className="btn-icone somente-celular empurra"

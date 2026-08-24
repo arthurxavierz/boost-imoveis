@@ -9,32 +9,14 @@ export default function PaginaEntrar() {
   return (
     <div className="entrada">
       <aside className="entrada-arte">
-        <div className="linha-flex">
+        {/* Mesmo logotipo da lateral, e por isso reusa .lateral-marca:
+            o estilo mora num lugar so e nao ha duas versoes da marca
+            para manter em dia. */}
+        <div className="lateral-marca" style={{ padding: 0, border: 'none' }}>
           <span className="selo" aria-hidden="true" />
           <div>
-            <strong
-              style={{
-                display: 'block',
-                fontSize: '0.8rem',
-                fontWeight: 700,
-                letterSpacing: '0.18em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Boost
-            </strong>
-            <span
-              style={{
-                display: 'block',
-                fontSize: '0.6rem',
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                color: 'rgba(255,255,255,.45)',
-                marginTop: 3,
-              }}
-            >
-              Negócios Imobiliários
-            </span>
+            <strong>boost</strong>
+            <span>negócios imobiliários</span>
           </div>
         </div>
 

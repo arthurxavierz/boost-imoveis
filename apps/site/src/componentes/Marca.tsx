@@ -3,26 +3,47 @@ import Link from 'next/link';
 import { SITE } from '../lib/site';
 
 /**
- * A marca da Boost.
+ * A marca da Boost, por extenso.
  *
- * O simbolo entra como <img> de um SVG, e nao inline no JSX, por um
- * motivo de peso: ele aparece no cabecalho e no rodape de toda pagina
- * do site, e inline seria o mesmo desenho repetido dentro de cada HTML
- * que o servidor manda. Como arquivo, o navegador baixa uma vez e
- * reaproveita no resto da navegacao.
+ * O logotipo é composto aqui em HTML, e não importado como um SVG
+ * pronto, por três razões práticas:
  *
- * O preco disso e que <img> nao herda currentColor. Por isso a cor vem
- * de uma mascara CSS em .marca-selo: o SVG vira recorte, e quem pinta e
- * o background. Assim o mesmo arquivo sai ouro no cabecalho e branco em
- * fundo claro, sem duplicar arquivo.
+ *   O nome fica sendo texto de verdade. Leitor de tela lê "boost", o
+ *   Google indexa a palavra, e quem copia o cabeçalho copia o nome —
+ *   nada disso acontece com um SVG achatado.
+ *
+ *   Escala sem decisão. Um SVG de logotipo tem uma proporção fixa
+ *   entre símbolo e palavra; aqui os dois acompanham o corpo de texto
+ *   do contexto, e a versão compacta do celular sai da mesma fonte.
+ *
+ *   Uma família só. O wordmark usa a mesma Outfit do resto do site,
+ *   então trocar a fonte troca o logotipo junto, sem alguém precisar
+ *   lembrar de reexportar um arquivo.
+ *
+ * O símbolo continua vindo do SVG, porque desenho é desenho.
  */
-export function Marca({ href = '/', rotulo }: { href?: string; rotulo?: string }) {
+export function Marca({
+  href = '/',
+  rotulo,
+  compacta = false,
+}: {
+  href?: string;
+  rotulo?: string;
+  /** Só o símbolo e a palavra, sem a linha de apoio. */
+  compacta?: boolean;
+}) {
   return (
     <Link href={href} className="marca" aria-label={rotulo ?? SITE.nome}>
       <span className="marca-selo" aria-hidden="true" />
       <span className="marca-texto">
-        <span className="marca-nome">{SITE.nomeCurto}</span>
-        <span className="marca-sub">Negócios Imobiliários</span>
+        <span className="marca-nome" aria-hidden="true">
+          boost
+        </span>
+        {!compacta && (
+          <span className="marca-sub" aria-hidden="true">
+            negócios imobiliários
+          </span>
+        )}
       </span>
     </Link>
   );

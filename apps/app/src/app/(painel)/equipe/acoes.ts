@@ -61,8 +61,19 @@ function atualizar() {
 /**
  * Cadastra ou edita alguem da equipe.
  *
- * Ao cadastrar, a pessoa recebe um convite por e-mail e define a propria
- * senha. Ninguem digita senha de terceiro em lugar nenhum deste sistema.
+ * O administrador define a senha na hora, e a pessoa entra direto. Nao
+ * ha convite por e-mail.
+ *
+ * A escolha tem um custo que vale registrar: o admin conhece a senha
+ * inicial de quem ele cadastra. O caminho do convite evitaria isso,
+ * mas depende de servidor de e-mail configurado, de o link nao cair no
+ * spam e de a pessoa clicar dentro do prazo — e numa equipe pequena,
+ * onde quem cadastra esta na mesma sala de quem vai usar, isso troca
+ * um risco pequeno por tres pontos de falha reais.
+ *
+ * O que reduz o custo: a senha e sorteada com crypto.getRandomValues no
+ * navegador, nunca fica gravada em lugar nenhum do sistema, e a pessoa
+ * pode troca-la em Perfil no primeiro acesso.
  */
 export async function salvarPessoa(
   _anterior: EstadoAcao,
@@ -76,6 +87,8 @@ export async function salvarPessoa(
   const telefone = texto(dados, 'telefone').replace(/\D/g, '');
   const creci = texto(dados, 'creci');
 
+  const senha = String(dados.get('senha') ?? '');
+
   const papelBruto = texto(dados, 'papel') as Papel;
   const papel = PAPEIS_VALIDOS.includes(papelBruto) ? papelBruto : 'corretor';
   const meta = Number(texto(dados, 'meta_mensal').replace(/\D/g, '')) || 0;
@@ -83,7 +96,14 @@ export async function salvarPessoa(
 
   if (nome.length < 2) return { ok: false, erro: 'Informe o nome completo.' };
   if (!id && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return { ok: false, erro: 'Informe um e-mail válido para o convite de acesso.' };
+    return { ok: false, erro: 'Informe um e-mail válido. É por ele que a pessoa entra.' };
+  }
+
+  // Oito e o minimo do proprio Supabase. Nao inventamos regra de
+  // maiuscula e simbolo: elas empurram a pessoa para "Senha@123", que e
+  // pior que uma frase longa. O botao de sortear resolve melhor.
+  if (!id && senha.length < 8) {
+    return { ok: false, erro: 'A senha precisa de ao menos 8 caracteres.' };
   }
 
   const eAdmin = usuario.papel === 'admin';
@@ -161,21 +181,32 @@ export async function salvarPessoa(
     console.error('[equipe] chave de serviço ausente:', erro);
     return {
       ok: false,
-      erro: 'Falta a chave SUPABASE_SERVICE_ROLE_KEY no servidor para enviar o convite.',
+      erro: 'Falta a chave SUPABASE_SERVICE_ROLE_KEY no servidor para criar o acesso.',
     };
   }
 
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { nome, telefone },
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.boostimoveis.com.br'}/entrar`,
+  // email_confirm: true marca o endereco como verificado sem mandar
+  // nada. Sem isso o Supabase segura o login esperando a confirmacao
+  // que, neste fluxo, nunca vai chegar.
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password: senha,
+    email_confirm: true,
+    user_metadata: { nome, telefone },
   });
 
   if (error) {
-    console.error('[equipe] falha no convite:', error);
-    if (error.message.includes('already been registered')) {
+    console.error('[equipe] falha ao criar acesso:', error);
+    if (
+      error.message.includes('already been registered') ||
+      error.message.includes('already exists')
+    ) {
       return { ok: false, erro: 'Este e-mail já tem acesso ao sistema.' };
     }
-    return { ok: false, erro: 'Não foi possível enviar o convite agora.' };
+    if (error.message.toLowerCase().includes('password')) {
+      return { ok: false, erro: 'O Supabase recusou esta senha. Tente uma mais longa.' };
+    }
+    return { ok: false, erro: 'Não foi possível criar o acesso agora.' };
   }
 
   const novoId = data.user?.id;
@@ -190,7 +221,7 @@ export async function salvarPessoa(
       p_meta: meta,
     });
 
-    if (erroAcesso) console.error('[equipe] convite enviado, acesso pendente:', erroAcesso);
+    if (erroAcesso) console.error('[equipe] usuário criado, acesso pendente:', erroAcesso);
 
     if (creci) {
       await supabase.rpc('atualizar_perfil', { p_usuario_id: novoId, p_creci: creci });
@@ -200,7 +231,61 @@ export async function salvarPessoa(
   atualizar();
   return {
     ok: true,
-    mensagem: `Convite enviado para ${email}. A pessoa define a própria senha pelo link.`,
+    mensagem: `Acesso criado para ${email}. Entregue a senha à pessoa por um canal seguro — ela não aparece de novo.`,
+  };
+}
+
+/**
+ * Troca a senha de alguem da equipe.
+ *
+ * Existe por causa da escolha acima. Sem convite por e-mail, tambem nao
+ * ha "esqueci minha senha" — e sem esta funcao, quem esquecesse ficaria
+ * de fora do sistema para sempre, sem caminho de volta.
+ *
+ * Só o administrador chama, e ele nao pode trocar a propria senha por
+ * aqui: para isso existe a tela de Perfil, que exige a senha atual. A
+ * diferenca importa — esta funcao troca sem conferir nada, e usada em
+ * si mesma seria um jeito de contornar aquela conferencia.
+ */
+export async function redefinirSenha(id: string, senha: string): Promise<EstadoAcao> {
+  const usuario = await exigirUsuario();
+
+  if (usuario.papel !== 'admin') {
+    return { ok: false, erro: 'Apenas o administrador redefine a senha de outra pessoa.' };
+  }
+  if (id === usuario.id) {
+    return {
+      ok: false,
+      erro: 'Para trocar a sua própria senha, use a tela de Perfil.',
+    };
+  }
+  if (senha.length < 8) {
+    return { ok: false, erro: 'A senha precisa de ao menos 8 caracteres.' };
+  }
+
+  if (modoDemo()) {
+    return { ok: true, mensagem: 'Senha redefinida. (demonstração: nada foi gravado)' };
+  }
+
+  let admin;
+  try {
+    admin = criarClienteAdmin();
+  } catch (erro) {
+    console.error('[equipe] chave de serviço ausente:', erro);
+    return { ok: false, erro: 'Falta a chave SUPABASE_SERVICE_ROLE_KEY no servidor.' };
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(id, { password: senha });
+
+  if (error) {
+    console.error('[equipe] falha ao redefinir senha:', error);
+    return { ok: false, erro: 'Não foi possível redefinir a senha agora.' };
+  }
+
+  atualizar();
+  return {
+    ok: true,
+    mensagem: 'Senha redefinida. Entregue à pessoa por um canal seguro.',
   };
 }
 

@@ -80,10 +80,12 @@ export default async function PaginaInicial() {
             </span>
           </h1>
 
+          {/* Dezoito palavras. O texto anterior tinha trinta e ocupava
+              cinco linhas no celular, empurrando a busca para fora da
+              primeira tela — e a busca e a acao principal desta pagina. */}
           <p className="hero-texto">
-            Curadoria de alto padrão, condomínios de luxo, áreas rurais e oportunidades de
-            investimento. Cada endereço da carteira passa por visita e checagem de documentação
-            antes de chegar até você.
+            Curadoria de alto padrão em Uberlândia e região. Cada endereço passa por visita e
+            checagem de documentação.
           </p>
 
           <BuscaHero
@@ -198,7 +200,6 @@ export default async function PaginaInicial() {
             <Revelar>
               <div className="cabecalho-secao">
                 <div>
-                  <span className="rotulo">Mais procurados</span>
                   <TituloRevelado texto="O que a região está buscando" />
                 </div>
               </div>
@@ -227,7 +228,6 @@ export default async function PaginaInicial() {
           <Revelar>
             <div className="cabecalho-secao">
               <div>
-                <span className="rotulo">Por que a Boost</span>
                 <TituloRevelado
                   texto="Consultoria de verdade, não catálogo de imóveis"
                   grifo="catálogo de imóveis"

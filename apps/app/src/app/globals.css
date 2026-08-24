@@ -57,8 +57,8 @@
   --roxo: #6b4e9e;
   --roxo-fundo: #f0ebf9;
 
-  --fonte-titulo: var(--f-serif), Georgia, serif;
-  --fonte-texto: var(--f-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --fonte-titulo: var(--f-marca), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --fonte-texto: var(--f-marca), system-ui, -apple-system, 'Segoe UI', sans-serif;
   --fonte-numero: var(--f-sans), system-ui, sans-serif;
 
   --raio-p: 5px;
@@ -216,23 +216,26 @@ button {
   mask: url('/assets/marca/boost-simbolo.svg') no-repeat center / contain;
 }
 
+/* O logotipo por extenso, do mesmo jeito que no site publico:
+   minusculo, peso 500, entreletra levemente negativa. Antes era
+   "BOOST" em caixa alta espacada, que e outro desenho — a marca se
+   escreve em minusculo. */
 .lateral-marca strong {
   display: block;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: 1.16rem;
+  font-weight: 500;
+  letter-spacing: -0.022em;
   color: var(--branco);
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .lateral-marca span {
   display: block;
-  font-size: 0.6rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
-  margin-top: 3px;
+  margin-top: 0.24em;
+  font-size: 0.56rem;
+  font-weight: 400;
+  letter-spacing: 0.09em;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .lateral-grupo {

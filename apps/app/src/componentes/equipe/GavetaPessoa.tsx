@@ -15,6 +15,25 @@ import { salvarPessoa, type EstadoAcao } from '@/app/(painel)/equipe/acoes';
 import { IconeAlerta, IconeCadeado, IconeFechar, IconeInfo } from '@/componentes/Icones';
 import type { Carteira } from './Equipe';
 
+/**
+ * Senha forte, sorteada no navegador.
+ *
+ * Usa crypto.getRandomValues, e nao Math.random: o segundo e previsivel
+ * o bastante para que, sabendo o instante do cadastro, alguem consiga
+ * reduzir muito o espaco de busca. Para uma senha que da acesso a
+ * carteira inteira, isso importa.
+ *
+ * O alfabeto exclui os caracteres que se confundem lidos em voz alta ou
+ * anotados no papel — O e 0, l e 1, I. A senha vai ser ditada por
+ * telefone alguma hora.
+ */
+function sortearSenha(): string {
+  const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
+  const bytes = new Uint32Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (n) => alfabeto[n % alfabeto.length]).join('');
+}
+
 const ESTADO_INICIAL: EstadoAcao = { ok: false };
 
 /**
@@ -48,6 +67,8 @@ export function GavetaPessoa({
   const [estado, enviar, enviando] = useActionState(salvarPessoa, ESTADO_INICIAL);
 
   const novo = !pessoa;
+  const [senha, setSenha] = useState('');
+  const [senhaVisivel, setSenhaVisivel] = useState(false);
   const eAdmin = usuario.papel === 'admin';
   const euMesmo = pessoa?.id === usuario.id;
 
@@ -94,7 +115,7 @@ export function GavetaPessoa({
             <h2>{novo ? 'Cadastrar integrante' : (pessoa?.nome ?? '')}</h2>
             <p>
               {novo
-                ? 'A pessoa recebe um convite por e-mail e define a própria senha.'
+                ? 'Você define o acesso aqui. A pessoa entra direto, sem link de e-mail.'
                 : euMesmo
                   ? 'Seus dados de contato.'
                   : 'Cadastro, papel e permissões de acesso.'}
@@ -138,8 +159,53 @@ export function GavetaPessoa({
                     placeholder="nome@boostimoveis.com.br"
                     required={novo}
                   />
-                  {novo && <span className="ajuda">O convite vai para este endereço.</span>}
+                  {novo && <span className="ajuda">É com ele que a pessoa entra no sistema.</span>}
                 </div>
+
+                {novo && (
+                <div className="campo">
+                  <label htmlFor="senha">
+                    Senha de acesso<span className="obrigatorio">*</span>
+                  </label>
+                  <div className="linha-flex" style={{ gap: 8, flexWrap: 'nowrap' }}>
+                    <input
+                      id="senha"
+                      name="senha"
+                      type={senhaVisivel ? 'text' : 'password'}
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                      minLength={8}
+                      required
+                      autoComplete="new-password"
+                      placeholder="Mínimo de 8 caracteres"
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-claro"
+                      onClick={() => setSenhaVisivel((v) => !v)}
+                      title={senhaVisivel ? 'Ocultar' : 'Mostrar'}
+                    >
+                      {senhaVisivel ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-claro"
+                      onClick={() => {
+                        setSenha(sortearSenha());
+                        setSenhaVisivel(true);
+                      }}
+                      title="Gerar uma senha forte"
+                    >
+                      Sortear
+                    </button>
+                  </div>
+                  <span className="ajuda">
+                    Anote e entregue à pessoa por um canal seguro. Ela pode trocar depois em
+                    Perfil. O sistema não mostra esta senha de novo depois de salvar.
+                  </span>
+                </div>
+                )}
 
                 <div className="campo">
                   <label htmlFor="telefone">Telefone</label>
@@ -315,7 +381,7 @@ export function GavetaPessoa({
               {enviando
                 ? 'Salvando...'
                 : novo
-                  ? 'Cadastrar e enviar convite'
+                  ? 'Criar acesso'
                   : 'Salvar alterações'}
             </button>
           </footer>

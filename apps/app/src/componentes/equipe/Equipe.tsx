@@ -22,7 +22,7 @@ import {
   IconeLixeira,
   IconeMais,
 } from '@/componentes/Icones';
-import { alternarAcesso, removerPessoa } from '@/app/(painel)/equipe/acoes';
+import { alternarAcesso, redefinirSenha, removerPessoa } from '@/app/(painel)/equipe/acoes';
 import { GavetaPessoa } from './GavetaPessoa';
 
 export interface Carteira {
@@ -87,6 +87,42 @@ export function Equipe({
     iniciar(async () => {
       const r = await alternarAcesso(pessoa.id, !pessoa.ativo);
       avisar(r.ok ? (r.mensagem ?? 'Acesso alterado.') : (r.erro ?? 'Falha.'), !r.ok);
+    });
+  }
+
+  /**
+   * Redefine a senha de alguem.
+   *
+   * A senha e sorteada aqui e mostrada uma unica vez, num prompt que a
+   * pessoa copia. Nao ha tela para consulta-la depois, e isso e
+   * proposital: senha guardada em algum canto do sistema e senha que
+   * vaza junto com o resto no dia de um acesso indevido.
+   */
+  function trocarSenha(pessoa: Perfil) {
+    const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
+    const bytes = new Uint32Array(16);
+    crypto.getRandomValues(bytes);
+    const sugestao = Array.from(bytes, (n) => alfabeto[n % alfabeto.length]).join('');
+
+    const escolhida = window.prompt(
+      [
+        `Nova senha para ${pessoa.nome}.`,
+        '',
+        'Anote antes de confirmar: ela não aparece de novo.',
+        'Você pode trocar por outra de sua preferência.',
+      ].join('\n'),
+      sugestao,
+    );
+
+    if (escolhida === null) return;
+    if (escolhida.trim().length < 8) {
+      avisar('A senha precisa de ao menos 8 caracteres.', true);
+      return;
+    }
+
+    iniciar(async () => {
+      const r = await redefinirSenha(pessoa.id, escolhida.trim());
+      avisar(r.ok ? (r.mensagem ?? 'Senha redefinida.') : (r.erro ?? 'Falha.'), !r.ok);
     });
   }
 
@@ -271,6 +307,15 @@ export function Equipe({
                                   disabled={pendente}
                                 >
                                   {p.ativo ? 'Desativar' : 'Reativar'}
+                                </button>
+
+                                <button
+                                  className="btn btn-claro btn-pequeno"
+                                  onClick={() => trocarSenha(p)}
+                                  disabled={pendente}
+                                  title="Definir uma nova senha para esta pessoa"
+                                >
+                                  Nova senha
                                 </button>
 
                                 <button

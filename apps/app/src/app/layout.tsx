@@ -1,20 +1,20 @@
 import type { Metadata, Viewport } from 'next';
-import { Fraunces, Inter } from 'next/font/google';
+import { Outfit } from 'next/font/google';
 
 import './globals.css';
 
-const serif = Fraunces({
+/**
+ * A mesma Outfit do site publico.
+ *
+ * O painel e o site sao dois apps, mas uma marca so. Fontes diferentes
+ * nos dois fariam o consultor sentir que trocou de empresa ao sair da
+ * vitrine para a gestao — e o logotipo, que e desenhado nesta familia,
+ * ficaria estranho sobre um texto de outra.
+ */
+const outfit = Outfit({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  style: ['normal', 'italic'],
-  variable: '--f-serif',
-  display: 'swap',
-});
-
-const sans = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--f-sans',
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--f-marca',
   display: 'swap',
 });
 
@@ -41,7 +41,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${serif.variable} ${sans.variable}`}>
+    <html lang="pt-BR" className={outfit.variable}>
       <body>{children}</body>
     </html>
   );

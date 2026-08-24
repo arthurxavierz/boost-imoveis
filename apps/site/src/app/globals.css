@@ -17,8 +17,14 @@
 
 :root {
   /* Preto, do fundo ao relevo */
-  --preto: #000000;
-  --preto-950: #070707;
+  /* Preto absoluto nao existe em superficie nenhuma do mundo real, e o
+     olho sabe disso: #000000 le como ausencia de tela, nao como cor. O
+     que da a sensacao de material caro numa vitrine escura e um preto
+     levemente quente, com uma pontinha do ouro da marca dentro dele.
+     A diferenca e de tres pontos em cada canal, invisivel isolada e
+     evidente lado a lado. */
+  --preto: #080807;
+  --preto-950: #0b0b0a;
   --preto-900: #0d0d0d;
   --preto-850: #131313;
   --preto-800: #1a1a1a;
@@ -34,7 +40,10 @@
   --ouro-borda: rgba(243, 198, 35, 0.32);
 
   /* Branco e seus veus */
-  --branco: #ffffff;
+  /* Mesma razao no outro extremo: branco puro sobre preto vibra e
+     cansa em texto corrido. Um ponto abaixo mantem o contraste AAA e
+     tira o zumbido. */
+  --branco: #fbfaf8;
   --texto: rgba(255, 255, 255, 0.92);
   --texto-apoio: rgba(255, 255, 255, 0.66);
   --texto-mudo: rgba(255, 255, 255, 0.42);
@@ -50,8 +59,12 @@
   --zap-claro: #4ae37f;
   --zap-escuro: #128c7e;
 
-  --fonte-titulo: var(--f-serif), 'Georgia', 'Times New Roman', serif;
-  --fonte-texto: var(--f-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Uma familia so. Os dois nomes continuam existindo porque 26 lugares
+     do arquivo os usam, e porque a distincao ainda vale como intencao:
+     `titulo` e o registro de display, `texto` e o de leitura. O que
+     muda entre eles agora e peso e entreletra, nao a familia. */
+  --fonte-titulo: var(--f-marca), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --fonte-texto: var(--f-marca), system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --largura: 1320px;
   --largura-estreita: 780px;
@@ -195,35 +208,88 @@ main {
 }
 
 /* ============================================================
+   GRAO
+   ============================================================ */
+
+/* Uma camada de ruido finissima sobre a pagina inteira.
+
+   E o que separa "fundo preto" de "superficie preta". Sem ela o preto
+   e um vazio digital perfeito; com ela ganha a textura de papel
+   fotografico, e as fotos dos imoveis param de parecer coladas por
+   cima de um buraco.
+
+   Tres decisoes que fazem ela nao custar nada:
+
+   `position: fixed` — a camada nunca rola. Grao sobre um container que
+   rola obriga a GPU a repintar o ruido a cada quadro, e e assim que se
+   mata o desempenho no celular.
+
+   `pointer-events: none` — ela cobre a tela inteira e nao pode
+   interceptar um unico toque.
+
+   O SVG vai embutido em data URI: sao 300 bytes, nao vale uma
+   requisicao, e assim nao ha um quadro sem grao no primeiro
+   carregamento. */
+.grao {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23r)'/%3E%3C/svg%3E");
+}
+
+/* Quem pediu menos movimento continua vendo o grao: ele nao se mexe.
+   O que some e o brilho que respira, mais abaixo. */
+
+/* ============================================================
    TIPOGRAFIA
    ============================================================ */
 
+/* A hierarquia vem de peso e entreletra, nao de corpo.
+   Numa sans geometrica, aumentar so o tamanho faz o titulo gritar sem
+   ganhar presenca. O que da presenca e o contraste entre os extremos
+   da familia: display leve e apertado de um lado, rotulo pesado e
+   espacado do outro. E o mesmo recurso que marca de moda usa, e o que
+   substitui o contraste que a serifada dava de graca. */
 .titulo-1 {
   font-family: var(--fonte-titulo);
-  font-size: clamp(2.6rem, 6.4vw, 5.2rem);
-  font-weight: 400;
-  line-height: 1.02;
-  letter-spacing: -0.028em;
+  font-size: clamp(2.5rem, 5.8vw, 4.6rem);
+  font-weight: 300;
+  line-height: 1.04;
+  /* Entreletra negativa forte: no peso 300 as letras respiram sozinhas,
+     e sem apertar o titulo se desmancha em palavras soltas. */
+  letter-spacing: -0.036em;
 }
 
 .titulo-2 {
   font-family: var(--fonte-titulo);
-  font-size: clamp(1.9rem, 3.6vw, 3rem);
-  font-weight: 400;
-  line-height: 1.12;
-  letter-spacing: -0.022em;
+  font-size: clamp(1.8rem, 3.4vw, 2.7rem);
+  font-weight: 300;
+  line-height: 1.14;
+  letter-spacing: -0.03em;
 }
 
 .titulo-3 {
   font-family: var(--fonte-titulo);
-  font-size: clamp(1.3rem, 2.2vw, 1.75rem);
+  font-size: clamp(1.25rem, 2.1vw, 1.6rem);
   font-weight: 500;
-  line-height: 1.25;
-  letter-spacing: -0.014em;
+  line-height: 1.28;
+  letter-spacing: -0.018em;
 }
 
+/* O realce dentro do titulo. Sem serifada nao ha italico de verdade
+   para contrastar, entao o peso faz o trabalho: a palavra destacada
+   sobe para 500 contra o 300 do resto, e ganha o ouro. Peso e cor da
+   MESMA familia, nunca uma familia estranha injetada no meio da
+   frase. */
+/* O realce do titulo e um <em>, e <em> vem italico do navegador.
+   Sem este `font-style: normal` a palavra saia inclinada mesmo depois
+   de a regra do italico ter sido removida — e no celular, inclinada
+   com entreletra negativa, ela vazava pela borda direita da tela. */
 .destaque-italico {
-  font-style: italic;
+  font-style: normal;
+  font-weight: 500;
   color: var(--ouro);
 }
 
@@ -235,6 +301,7 @@ main {
    respeita a regra do ouro raro: um elemento em ouro por bloco. */
 .grifo {
   display: inline-block;
+  font-weight: 500;
   color: var(--ouro);
 }
 
@@ -506,8 +573,8 @@ main {
      sumia com 0x42. Declarar o display aqui faz o selo funcionar em
      qualquer contexto que o receba. */
   display: block;
-  width: 30px;
-  height: 42px;
+  width: 31px;
+  height: 44px;
   flex-shrink: 0;
   background: var(--ouro);
   -webkit-mask: url('/assets/marca/boost-simbolo.svg') no-repeat center / contain;
@@ -523,22 +590,39 @@ main {
   transform: translateY(-2px);
 }
 
+/* O logotipo por extenso.
+
+   Minusculo e proposital: e como a marca se escreve. O peso 500 com
+   entreletra levemente negativa e o que mais se aproxima do desenho
+   original — uma geometrica de bojos circulares, sem modulacao.
+
+   O ouro fica no simbolo, nunca na palavra. Se os dois fossem
+   dourados a assinatura viraria um bloco amarelo e perderia a leitura
+   de duas partes: a marca e o nome. */
 .marca-nome {
   display: block;
-  font-family: var(--fonte-titulo);
-  font-size: 1.32rem;
+  font-size: 1.42rem;
   font-weight: 500;
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  line-height: 1;
+  letter-spacing: -0.022em;
   color: var(--branco);
 }
 
+/* A linha de apoio alinha pela largura da palavra acima.
+   `text-align: justify` num texto de uma linha nao faz nada; o que
+   distribui e o letter-spacing calculado para fechar na mesma medida
+   de "boost". O valor abaixo foi ajustado no olho, e por isso esta
+   fixo: uma conta em ch ou em % erraria, porque depende do desenho
+   especifico da fonte. */
 .marca-sub {
   display: block;
-  font-size: 0.64rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--texto-mudo);
+  margin-top: 0.28em;
+  font-size: 0.545rem;
+  font-weight: 400;
+  letter-spacing: 0.098em;
+  text-transform: lowercase;
+  color: var(--texto-apoio);
+  white-space: nowrap;
 }
 
 .cabecalho-acoes {
@@ -3907,7 +3991,8 @@ main {
 
 @media (max-width: 640px) {
   .titulo-1 {
-    font-size: clamp(2.15rem, 10vw, 3rem);
+    font-size: clamp(1.95rem, 8.6vw, 2.7rem);
+    letter-spacing: -0.03em;
   }
 
   .hero .titulo-1 {
@@ -3950,13 +4035,45 @@ main {
     font-size: 16px;
   }
 
+  /* A faixa de atalhos vira uma tira rolavel.
+
+     O `align-self: stretch` e o que faz funcionar. `.hero-conteudo` e
+     uma coluna com align-items: center, entao os filhos encolhem para
+     a largura do conteudo — a tira ficava com 546px dentro de uma tela
+     de 390 e transbordava dos DOIS lados, cortada no comeco e no fim.
+     Parecia defeito, nao uma tira que rola. Esticando a largura, o
+     overflow-x passa a valer e ela comeca no primeiro item. */
   .atalhos {
+    /* `stretch` sozinho, sem width: 100%.
+       Com stretch, a largura e calculada a partir do espaco disponivel
+       DESCONTANDO as margens — e como elas sao negativas, a tira cresce
+       os 40px que precisa para encostar nas duas bordas da tela. Um
+       `width: 100%` explicito atropela essa conta e prende a tira na
+       largura do container, deixando 20px mortos na direita. */
+    align-self: stretch;
     flex-wrap: nowrap;
     overflow-x: auto;
     justify-content: flex-start;
     padding-inline: 20px;
     margin-inline: -20px;
     scrollbar-width: none;
+    /* Encaixa o item no lugar ao soltar o dedo, em vez de parar no
+       meio de uma pilula. `proximity` e nao `mandatory`: quem so quer
+       espiar o que vem depois nao fica preso no proximo item. */
+    scroll-snap-type: x proximity;
+    /* Sem isto o snap encosta o primeiro item no inicio do scrollport,
+       ignorando o padding — a tira nascia com scrollLeft: 20 e a
+       primeira pilula grudava na borda da tela. scroll-padding manda o
+       snap respeitar o mesmo recuo do resto do conteudo. */
+    scroll-padding-inline-start: 20px;
+    /* A mascara desfaz a borda direita, que e o unico jeito de dizer
+       "tem mais coisa aqui" sem escrever isso. */
+    -webkit-mask: linear-gradient(90deg, #000 88%, transparent 100%);
+    mask: linear-gradient(90deg, #000 88%, transparent 100%);
+  }
+
+  .atalho {
+    scroll-snap-align: start;
   }
 
   .atalhos::-webkit-scrollbar {
