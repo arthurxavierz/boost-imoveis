@@ -314,19 +314,47 @@ export async function buscarEmpresas(filtro: FiltroProspeccao): Promise<EstadoBu
   }
 }
 
+/**
+ * Traduz o erro do Google, sem esconder o original.
+ *
+ * A primeira versao desta funcao trocava a mensagem do Google por um
+ * texto amigavel — e o texto amigavel listava tres causas possiveis,
+ * o que obrigava a testar as tres. A mensagem do Google diz qual das
+ * tres e, em uma linha.
+ *
+ * Ela vai junto, entre parenteses. Isto e tela interna, atras de
+ * login: nao ha para quem vazar, e o minuto que ela economiza no
+ * diagnostico vale mais que a elegancia de uma frase limpa.
+ */
 function traduzirErroPlaces(mensagem: string | undefined, status: number): string {
-  const m = (mensagem ?? '').toLowerCase();
+  const original = (mensagem ?? '').trim();
+  const m = original.toLowerCase();
+  const rodape = original ? ` (Google: "${original}")` : ` (HTTP ${status})`;
 
+  // O erro mais comum, e o mais confuso: existem DUAS Places API no
+  // console do Google. A antiga chama "Places API"; esta usa a
+  // "Places API (New)". Restringir a chave a antiga passa despercebido
+  // porque o nome quase nao muda.
+  if (m.includes('places api') && (m.includes('not enabled') || m.includes('disabled'))) {
+    return `A "Places API (New)" nao esta ativada neste projeto do Google. Cuidado: existe tambem uma "Places API" antiga, e nao e ela.${rodape}`;
+  }
+  if (m.includes('referer') || m.includes('referrer')) {
+    return `A chave tem restricao por site (referenciador HTTP). A chamada sai do servidor e nao manda referenciador, entao o Google recusa. Troque para "Nenhuma" ou restrinja por IP.${rodape}`;
+  }
   if (status === 403 || m.includes('permission') || m.includes('not authorized')) {
-    return 'A chave do Google foi recusada. Verifique se a Places API (New) está ativada no projeto e se a chave não tem restrição de domínio que bloqueie o servidor.';
+    return `A chave foi recusada. Quase sempre e a restricao de API: abra a chave no console e confirme que "Places API (New)" esta na lista de APIs permitidas.${rodape}`;
   }
   if (status === 429 || m.includes('quota') || m.includes('resource_exhausted')) {
-    return 'A cota do Google Places acabou por hoje. Verifique o faturamento no Google Cloud.';
+    return `A cota do Google acabou. Verifique o faturamento do projeto no Google Cloud.${rodape}`;
   }
-  if (m.includes('api key')) {
-    return 'Chave do Google inválida. Confira a GOOGLE_PLACES_API_KEY.';
+  if (m.includes('billing')) {
+    return `O projeto do Google esta sem faturamento ativo. A Places API exige cartao cadastrado mesmo dentro do credito gratuito.${rodape}`;
   }
-  return mensagem || 'O Google Places recusou a consulta.';
+  if (m.includes('api key not valid') || m.includes('api_key_invalid')) {
+    return `A chave nao existe ou foi revogada. Confira a GOOGLE_PLACES_API_KEY no Netlify.${rodape}`;
+  }
+
+  return original || `O Google recusou a consulta (HTTP ${status}).`;
 }
 
 export interface EstadoAcao {
