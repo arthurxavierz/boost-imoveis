@@ -1,4 +1,5 @@
 export * from './tipos';
+export * from './autoria';
 export * from './formato';
 export * from './regras';
 export * from './agenda';

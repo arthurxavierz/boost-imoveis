@@ -1,7 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { ImovelPublico } from '@boost/core';
 import { urlFoto } from '@boost/db';
@@ -18,6 +19,15 @@ import { IconeFechar, IconeImagem, IconeSeta, IconeSetaEsquerda } from './Icones
  *
  * Navegacao por seta do teclado e por gesto de arrastar, porque metade
  * das visitas vem do celular e ali ninguem procura botao.
+ *
+ * O visor vai para o <body> por portal, e nao fica onde o componente
+ * mora. Motivo concreto: a pagina do imovel envolve a galeria num
+ * <Revelar>, e essa div tem "will-change: transform" para a animacao de
+ * entrada. Qualquer will-change de transform cria um bloco de contencao
+ * novo, e um filho "position: fixed" passa a se prender a essa div em
+ * vez da janela — o visor abria do tamanho da galeria, com o cabecalho
+ * do site e o botao do WhatsApp por cima. No <body> nao ha ancestral
+ * transformado, e "tela cheia" volta a ser a tela inteira.
  */
 export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
   const fotos = (imovel.fotos ?? [])
@@ -27,8 +37,14 @@ export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
   const [visor, setVisor] = useState(false);
   const [atual, setAtual] = useState(0);
   const [toqueX, setToqueX] = useState<number | null>(null);
+  // createPortal so roda no navegador. Sem esta trava a geracao estatica
+  // quebra ao procurar document no servidor.
+  const [montado, setMontado] = useState(false);
+  const tiras = useRef<HTMLDivElement>(null);
 
   const total = fotos.length;
+
+  useEffect(() => setMontado(true), []);
 
   const andar = useCallback(
     (passo: number) => {
@@ -48,13 +64,31 @@ export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
     }
 
     document.addEventListener('keydown', aoTeclar);
+
+    // Trava a rolagem sem deslocar a pagina: so esconder o overflow
+    // devolve ao body a largura da barra de rolagem, e o conteudo inteiro
+    // pula alguns pixels para o lado ao abrir e ao fechar o visor.
+    const larguraBarra = window.innerWidth - document.documentElement.clientWidth;
+    const overflowAntes = document.body.style.overflow;
+    const paddingAntes = document.body.style.paddingRight;
     document.body.style.overflow = 'hidden';
+    if (larguraBarra > 0) document.body.style.paddingRight = `${larguraBarra}px`;
 
     return () => {
       document.removeEventListener('keydown', aoTeclar);
-      document.body.style.overflow = '';
+      document.body.style.overflow = overflowAntes;
+      document.body.style.paddingRight = paddingAntes;
     };
   }, [visor, andar]);
+
+  // A miniatura da foto aberta se centraliza sozinha. Com vinte e cinco
+  // fotos a tira ativa saia da area visivel e a pessoa perdia a
+  // referencia de onde estava na sequencia.
+  useEffect(() => {
+    if (!visor) return;
+    const ativa = tiras.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    ativa?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [visor, atual]);
 
   function abrir(indice: number) {
     if (total === 0) return;
@@ -129,86 +163,123 @@ export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
             </div>
           );
         })}
+
+        {/* Botao explicito de abrir. O mosaico ja e clicavel, mas num
+            imovel com vinte e cinco fotos convem dizer quantas existem
+            antes da pessoa descobrir por acidente. */}
+        {total > 0 && (
+          <button className="galeria-abrir" onClick={() => abrir(0)}>
+            <IconeImagem />
+            Ver {total} {total === 1 ? 'foto' : 'fotos'}
+          </button>
+        )}
       </div>
 
-      {visor && total > 0 && (
-        <div className="visor" role="dialog" aria-modal="true" aria-label="Fotos do imóvel">
-          <header className="visor-topo">
-            <span>
-              {atual + 1} de {total}
-            </span>
-            <span>{fotos[atual].legenda ?? imovel.titulo}</span>
-            <button className="btn-icone" onClick={() => setVisor(false)} aria-label="Fechar fotos">
-              <IconeFechar />
-            </button>
-          </header>
-
+      {montado &&
+        visor &&
+        total > 0 &&
+        createPortal(
           <div
-            className="visor-palco"
-            onTouchStart={(e) => setToqueX(e.touches[0].clientX)}
-            onTouchEnd={(e) => {
-              if (toqueX === null) return;
-              const distancia = e.changedTouches[0].clientX - toqueX;
-              // Quarenta pixels separa um arrastar de um toque trêmulo.
-              if (Math.abs(distancia) > 40) andar(distancia > 0 ? -1 : 1);
-              setToqueX(null);
+            className="visor"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Fotos do imóvel"
+            // Clicar no vazio fecha, que e o gesto que todo mundo tenta
+            // primeiro. O palco e as tiras tratam o proprio clique.
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setVisor(false);
             }}
           >
-            {total > 1 && (
+            <header className="visor-topo">
+              <span className="visor-contador">
+                {atual + 1} <i aria-hidden="true">/</i> {total}
+              </span>
+              <span className="visor-legenda">{fotos[atual].legenda ?? imovel.titulo}</span>
               <button
-                className="visor-nav"
-                data-lado="esquerda"
-                onClick={() => andar(-1)}
-                aria-label="Foto anterior"
+                className="btn-icone"
+                onClick={() => setVisor(false)}
+                aria-label="Fechar fotos"
               >
-                <IconeSetaEsquerda />
+                <IconeFechar />
               </button>
-            )}
+            </header>
 
-            <Image
-              src={fotos[atual].url}
-              alt={fotos[atual].legenda ?? `${imovel.titulo}, foto ${atual + 1}`}
-              width={1600}
-              height={1067}
-              style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '100%' }}
-              priority
-            />
-
-            {total > 1 && (
-              <button
-                className="visor-nav"
-                data-lado="direita"
-                onClick={() => andar(1)}
-                aria-label="Próxima foto"
-              >
-                <IconeSeta />
-              </button>
-            )}
-          </div>
-
-          {total > 1 && (
-            <div className="visor-tiras">
-              {fotos.map((f, i) => (
+            <div
+              className="visor-palco"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setVisor(false);
+              }}
+              onTouchStart={(e) => setToqueX(e.touches[0].clientX)}
+              onTouchEnd={(e) => {
+                if (toqueX === null) return;
+                const distancia = e.changedTouches[0].clientX - toqueX;
+                // Quarenta pixels separa um arrastar de um toque trêmulo.
+                if (Math.abs(distancia) > 40) andar(distancia > 0 ? -1 : 1);
+                setToqueX(null);
+              }}
+            >
+              {total > 1 && (
                 <button
-                  key={f.url}
-                  className="visor-tira"
-                  aria-current={i === atual}
-                  onClick={() => setAtual(i)}
-                  aria-label={`Ir para a foto ${i + 1}`}
+                  className="visor-nav"
+                  data-lado="esquerda"
+                  onClick={() => andar(-1)}
+                  aria-label="Foto anterior"
                 >
-                  <Image
-                    src={f.url}
-                    alt=""
-                    width={192}
-                    height={132}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
+                  <IconeSetaEsquerda />
                 </button>
-              ))}
+              )}
+
+              {/* A chave por URL forca um <img> novo a cada troca. Sem
+                  ela o navegador mantem a foto anterior desenhada
+                  enquanto a proxima carrega, e a transicao fica com um
+                  quadro errado no meio. */}
+              <Image
+                key={fotos[atual].url}
+                src={fotos[atual].url}
+                alt={fotos[atual].legenda ?? `${imovel.titulo}, foto ${atual + 1}`}
+                width={2400}
+                height={1600}
+                quality={90}
+                className="visor-foto"
+                priority
+              />
+
+              {total > 1 && (
+                <button
+                  className="visor-nav"
+                  data-lado="direita"
+                  onClick={() => andar(1)}
+                  aria-label="Próxima foto"
+                >
+                  <IconeSeta />
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      )}
+
+            {total > 1 && (
+              <div className="visor-tiras" ref={tiras}>
+                {fotos.map((f, i) => (
+                  <button
+                    key={`${f.url}-${i}`}
+                    className="visor-tira"
+                    aria-current={i === atual}
+                    onClick={() => setAtual(i)}
+                    aria-label={`Ir para a foto ${i + 1}`}
+                  >
+                    <Image
+                      src={f.url}
+                      alt=""
+                      width={192}
+                      height={132}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

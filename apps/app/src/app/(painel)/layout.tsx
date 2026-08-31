@@ -1,3 +1,4 @@
+import { Assinatura } from '@/componentes/Assinatura';
 import { BarraDemo } from '@/componentes/BarraDemo';
 import { Navegacao } from '@/componentes/Navegacao';
 import { equipeDemo, modoDemo } from '@/lib/demonstracao';
@@ -20,7 +21,10 @@ export default async function LayoutPainel({ children }: { children: React.React
     <div className={`painel${demo ? ' com-faixa-demo' : ''}`}>
       {demo && <BarraDemo usuario={usuario} equipe={equipeDemo()} />}
       <Navegacao usuario={usuario} />
-      <div className="conteudo">{children}</div>
+      <div className="conteudo">
+        {children}
+        <Assinatura />
+      </div>
     </div>
   );
 }

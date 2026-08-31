@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
+import { Assinatura } from '@/componentes/Assinatura';
 import { FormularioEntrada } from '@/componentes/FormularioEntrada';
 
 export const metadata: Metadata = { title: 'Entrar' };
@@ -34,6 +35,8 @@ export default function PaginaEntrar() {
         <Suspense fallback={<div className="esqueleto" style={{ height: 380, width: 384 }} />}>
           <FormularioEntrada />
         </Suspense>
+
+        <Assinatura />
       </main>
     </div>
   );

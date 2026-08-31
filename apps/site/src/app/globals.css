@@ -1769,7 +1769,13 @@ main {
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
-  padding-bottom: 14px;
+  /* Rolagem horizontal obriga o eixo vertical a virar "auto" tambem, e
+     o cartao sobe 5px no hover. Sem esta folga em cima o trilho corta a
+     borda superior do cartao levantado — e a margem negativa devolve o
+     alinhamento com o cabecalho da secao. */
+  padding-top: 10px;
+  margin-top: -10px;
+  padding-bottom: 16px;
   scrollbar-width: none;
 }
 
@@ -1820,75 +1826,6 @@ main {
 .esteira-controle:disabled {
   opacity: 0;
   pointer-events: none;
-}
-
-/* Cartao de busca salva, do bloco "mais procurados" */
-/* Os cartoes vivem sobre o preto da pagina, e o degrade deles nasce
-   quase preto tambem — sem a borda, o bloco inteiro sumia e a secao
-   parecia vazia. A borda desenha o limite; o ouro no hover diz que e
-   clicavel. */
-.cartao-busca {
-  position: relative;
-  display: block;
-  aspect-ratio: 4 / 3;
-  border-radius: var(--raio);
-  overflow: hidden;
-  isolation: isolate;
-  background: var(--preto-800);
-  border: 1px solid var(--linha-forte);
-  transition: transform var(--t), border-color var(--t-rapida);
-}
-
-.cartao-busca:hover {
-  transform: translateY(-4px);
-  border-color: var(--ouro-borda);
-}
-
-.cartao-busca-fundo {
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  background: linear-gradient(150deg, #1d1d1d, #070707);
-  transition: transform var(--t-lenta);
-}
-
-.cartao-busca:hover .cartao-busca-fundo {
-  transform: scale(1.07);
-}
-
-.cartao-busca::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.8));
-}
-
-.cartao-busca-texto {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  right: 16px;
-  display: grid;
-  gap: 2px;
-}
-
-.cartao-busca-texto strong {
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--branco);
-}
-
-/* A contagem e o que torna o cartao informacao, e nao so um link
-   bonito: quem le sabe se vale abrir antes de clicar. */
-.cartao-busca-texto small {
-  font-size: 0.8rem;
-  color: var(--texto-mudo);
-}
-
-.cartao-busca:hover .cartao-busca-texto strong {
-  color: var(--ouro);
 }
 
 /* ============================================================
@@ -2209,6 +2146,29 @@ main {
   flex-wrap: wrap;
   font-size: 0.84rem;
   color: var(--texto-mudo);
+}
+
+/* Linha propria, centralizada, no menor corpo do site. Disputar espaco
+   com o CRECI e a politica de privacidade deixaria o rodape com quatro
+   itens brigando na mesma linha — e o credito nao e a informacao mais
+   importante ali. */
+.rodape-autoria {
+  flex-basis: 100%;
+  text-align: center;
+  padding-top: 22px;
+  border-top: 1px solid var(--linha);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.26);
+}
+
+.rodape-autoria a {
+  color: inherit;
+  transition: color var(--t-rapida);
+}
+
+.rodape-autoria a:hover {
+  color: var(--ouro);
 }
 
 .rodape-creci {
@@ -3021,6 +2981,7 @@ main {
 
 /* Galeria */
 .galeria {
+  position: relative;
   display: grid;
   grid-template-columns: 2fr 1fr;
   grid-template-rows: repeat(2, 1fr);
@@ -3028,6 +2989,39 @@ main {
   height: clamp(340px, 52vh, 560px);
   border-radius: var(--raio-g);
   overflow: hidden;
+}
+
+/* Convite explicito para o visor, no canto da foto grande. O mosaico
+   inteiro ja e clicavel, mas quem chega numa ficha com vinte e cinco
+   fotos precisa saber que elas existem antes de descobrir por acidente. */
+.galeria-abrir {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid var(--linha-forte);
+  backdrop-filter: blur(10px);
+  color: var(--branco);
+  font-size: 0.88rem;
+  font-weight: 500;
+  transition: background var(--t-rapida), color var(--t-rapida), border-color var(--t-rapida);
+}
+
+.galeria-abrir:hover {
+  background: var(--ouro);
+  border-color: var(--ouro);
+  color: var(--preto);
+}
+
+.galeria-abrir svg {
+  width: 17px;
+  height: 17px;
 }
 
 .galeria-principal {
@@ -3073,59 +3067,108 @@ main {
   backdrop-filter: blur(2px);
 }
 
-/* Visor de tela cheia */
+/* Visor de tela cheia
+   ------------------------------------------------------------
+   O visor e renderizado por portal direto no <body>. Isso importa aqui:
+   "position: fixed" so se prende a janela quando nao ha ancestral com
+   transform, filter ou will-change, e a pagina do imovel envolve a
+   galeria num <Revelar>, que tem will-change: transform. Enquanto o
+   visor morava la dentro ele abria do tamanho da galeria, com o
+   cabecalho do site e o botao do WhatsApp por cima.
+
+   z-index acima do grao (200): a pelicula de ruido faz sentido sobre a
+   pagina, nao sobre a foto que a pessoa abriu justamente para ver em
+   detalhe. */
 .visor {
   position: fixed;
   inset: 0;
-  z-index: 90;
-  background: rgba(0, 0, 0, 0.96);
-  display: flex;
-  flex-direction: column;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.97);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   animation: surgir 0.2s var(--curva-suave);
+  backdrop-filter: blur(6px);
 }
 
 .visor-topo {
-  display: flex;
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 120px;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px;
+  padding: 14px clamp(16px, 2.4vw, 30px);
   color: var(--texto-apoio);
   font-size: 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Numero em destaque, "/" apagado. O contador e a informacao que a
+   pessoa consulta de relance entre uma seta e outra. */
+.visor-contador {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--branco);
+}
+
+.visor-contador i {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.visor-legenda {
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visor-topo .btn-icone {
+  justify-self: end;
 }
 
 .visor-palco {
-  flex: 1;
   position: relative;
   display: grid;
   place-items: center;
-  padding: 0 clamp(16px, 6vw, 80px) 24px;
+  padding: clamp(14px, 2vh, 28px) clamp(16px, 6vw, 108px);
   min-height: 0;
 }
 
-.visor-palco img {
+/* width/height auto deixam a foto no tamanho real dela, e os dois
+   maximos a encaixam no palco preservando a proporcao. Foto em pe e
+   foto deitada se resolvem com a mesma regra. */
+.visor-foto {
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   border-radius: var(--raio-p);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+  animation: surgir 0.25s var(--curva-suave);
 }
 
 .visor-nav {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 52px;
-  height: 52px;
+  width: 58px;
+  height: 58px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--branco);
-  transition: background var(--t-rapida);
+  backdrop-filter: blur(8px);
+  transition: background var(--t-rapida), color var(--t-rapida), border-color var(--t-rapida);
 }
 
 .visor-nav:hover {
   background: var(--ouro);
+  border-color: var(--ouro);
   color: var(--preto);
 }
 
@@ -3135,18 +3178,20 @@ main {
 }
 
 .visor-nav[data-lado='esquerda'] {
-  left: clamp(8px, 2vw, 28px);
+  left: clamp(8px, 2vw, 34px);
 }
 .visor-nav[data-lado='direita'] {
-  right: clamp(8px, 2vw, 28px);
+  right: clamp(8px, 2vw, 34px);
 }
 
 .visor-tiras {
   display: flex;
+  justify-content: safe center;
   gap: 8px;
   overflow-x: auto;
-  padding: 14px 24px 22px;
+  padding: 14px clamp(16px, 2.4vw, 30px) 20px;
   scrollbar-width: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .visor-tiras::-webkit-scrollbar {
@@ -3154,13 +3199,17 @@ main {
 }
 
 .visor-tira {
-  flex: 0 0 96px;
-  height: 66px;
+  flex: 0 0 112px;
+  height: 76px;
   border-radius: var(--raio-p);
   overflow: hidden;
   opacity: 0.42;
   border: 2px solid transparent;
   transition: opacity var(--t-rapida), border-color var(--t-rapida);
+}
+
+.visor-tira:hover {
+  opacity: 0.8;
 }
 
 .visor-tira[aria-current='true'] {
@@ -4138,6 +4187,12 @@ main {
     gap: 14px;
   }
 
+  .rodape-autoria {
+    align-self: stretch;
+    text-align: left;
+    padding-top: 16px;
+  }
+
   .ficha-tecnica,
   .simulador-resultado {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4208,13 +4263,26 @@ main {
     display: none;
   }
 
-  .visor-topo span:nth-child(2) {
+  /* Sem espaco para a legenda entre o contador e o fechar. */
+  .visor-topo {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-block: 10px;
+  }
+
+  .visor-legenda {
     display: none;
   }
 
   .visor-tira {
-    flex-basis: 74px;
+    flex: 0 0 74px;
     height: 52px;
+  }
+
+  .galeria-abrir {
+    right: 12px;
+    bottom: 12px;
+    padding: 9px 15px;
+    font-size: 0.82rem;
   }
 
   .imovel-bloco {

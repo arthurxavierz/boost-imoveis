@@ -12,6 +12,7 @@
 
 export {
   modoDemo as semBanco,
+  atualizadosVitrine,
   buscarVitrine as buscarDemo,
   condominioPorSlug,
   condominiosVitrine,

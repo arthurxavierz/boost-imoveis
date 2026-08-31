@@ -182,6 +182,30 @@ export async function buscarRecentes(cliente: Cliente, limite = 8): Promise<Imov
 }
 
 /**
+ * Os ultimos imoveis que mudaram, para o carrossel de novidades da home.
+ *
+ * Ordena por atualizado_em, e nao por criado_em como buscarRecentes.
+ * Sao coisas diferentes: "recem-cadastrado" e sobre quando o imovel
+ * entrou na carteira, e nunca muda depois; "atualizado" pega tambem o
+ * imovel antigo que baixou de preco, ganhou foto nova ou voltou a ficar
+ * disponivel. Numa carteira madura, onde quase nada entra por semana, e
+ * a segunda lista que tem novidade de verdade para mostrar.
+ */
+export async function buscarAtualizados(cliente: Cliente, limite = 10): Promise<ImovelPublico[]> {
+  const { data, error } = await cliente
+    .from(VIEW)
+    .select('*')
+    .eq('status', 'disponivel')
+    .order('atualizado_em', { ascending: false })
+    .limit(limite);
+  if (error) throw error;
+
+  const imoveis = (data ?? []) as ImovelPublico[];
+  await anexarFotos(cliente, imoveis);
+  return imoveis;
+}
+
+/**
  * Semelhantes ao imovel aberto: mesmo condominio primeiro, senao mesmo
  * bairro ou mesmo tipo, em faixa de preco proxima.
  */

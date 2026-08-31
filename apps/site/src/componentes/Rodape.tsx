@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { AUTORIA } from '@boost/core';
+
 import {
   IconeEmail,
   IconeFacebook,
@@ -173,6 +175,16 @@ export async function Rodape() {
           <span className="rodape-creci">{SITE.creci}</span>
 
           <Link href="/politica-de-privacidade">Política de privacidade</Link>
+
+          {/* Credito discreto de quem desenvolveu. Ultimo item da linha,
+              no tom mais apagado do rodape: presente para quem procura,
+              invisivel para quem nao esta procurando. */}
+          <span className="rodape-autoria">
+            Desenvolvido por {AUTORIA.nome}.{' '}
+            <a href={AUTORIA.url} target="_blank" rel="noopener noreferrer">
+              ({AUTORIA.arroba})
+            </a>
+          </span>
         </div>
       </div>
     </footer>

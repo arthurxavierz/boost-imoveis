@@ -227,6 +227,18 @@ export function recentesVitrine(limite = 8): ImovelPublico[] {
     .slice(0, limite);
 }
 
+/**
+ * Os últimos imóveis que mudaram. Espelha buscarAtualizados do banco:
+ * ordena por atualizado_em, que é o que muda quando o preço cai ou entra
+ * foto nova, e não por criado_em, que congela na data do cadastro.
+ */
+export function atualizadosVitrine(limite = 10): ImovelPublico[] {
+  return imoveisPublicos()
+    .filter((i) => i.status === 'disponivel')
+    .sort((a, b) => b.atualizado_em.localeCompare(a.atualizado_em))
+    .slice(0, limite);
+}
+
 // ------------------------------------------------------------
 // CONDOMÍNIOS
 // ------------------------------------------------------------

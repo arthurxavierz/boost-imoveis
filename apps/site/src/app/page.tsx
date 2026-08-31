@@ -1,11 +1,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
-import { buscarDestaques, buscarRecentes, type Facetas } from '@boost/db';
+import { buscarAtualizados, buscarDestaques, buscarRecentes } from '@boost/db';
 
 import { BrilhoPonteiro } from '@/componentes/BrilhoPonteiro';
 import { BuscaHero } from '@/componentes/BuscaHero';
 import { CartaoCondominio } from '@/componentes/CartaoCondominio';
+import { CartaoImovel } from '@/componentes/CartaoImovel';
 import { Contador } from '@/componentes/Contador';
 import { DestaquesComAbas } from '@/componentes/DestaquesComAbas';
 import { Esteira } from '@/componentes/Esteira';
@@ -16,7 +17,12 @@ import { TituloRevelado } from '@/componentes/TituloRevelado';
 import { IconeCasa, IconeSeta, IconeWhatsApp } from '@/componentes/Icones';
 import { carregarCondominios, carregarFacetas } from '@/lib/dados';
 import { imagemDoHero } from '@/lib/hero';
-import { destaquesVitrine, recentesVitrine, semBanco } from '@/lib/demonstracao';
+import {
+  atualizadosVitrine,
+  destaquesVitrine,
+  recentesVitrine,
+  semBanco,
+} from '@/lib/demonstracao';
 import { ATALHOS_HERO, SITE, linkWhatsApp } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
 
@@ -29,9 +35,10 @@ import { supabase } from '@/lib/supabase';
 export const revalidate = 300;
 
 export default async function PaginaInicial() {
-  const [destaques, recentes, condominios, facetas] = await Promise.all([
+  const [destaques, recentes, atualizados, condominios, facetas] = await Promise.all([
     carregar(() => buscarDestaques(supabase(), 8), () => destaquesVitrine(8), []),
     carregar(() => buscarRecentes(supabase(), 8), () => recentesVitrine(8), []),
+    carregar(() => buscarAtualizados(supabase(), 10), () => atualizadosVitrine(10), []),
     carregarCondominios({ limite: 10 }),
     carregarFacetas(),
   ]);
@@ -39,10 +46,6 @@ export default async function PaginaInicial() {
   const luxo = condominios.filter((c) => c.luxo);
   const vitrineCondominios = luxo.length >= 4 ? luxo : condominios;
 
-  // As buscas mais procuradas saem dos bairros com mais imoveis, e nao de
-  // uma lista escrita a mao. Assim o bloco acompanha a carteira sozinho
-  // quando a importacao trouxer bairro novo.
-  const procurados = montarProcurados(facetas);
   const heroImagem = imagemDoHero();
 
   return (
@@ -193,30 +196,36 @@ export default async function PaginaInicial() {
         </section>
       )}
 
-      {/* ---------- MAIS PROCURADOS ---------- */}
-      {procurados.length > 0 && (
+      {/* ---------- NOVIDADES DA CARTEIRA ---------- */}
+      {atualizados.length > 0 && (
         <section className="secao">
           <div className="container">
             <Revelar>
               <div className="cabecalho-secao">
                 <div>
-                  <TituloRevelado texto="O que a região está buscando" />
+                  <span className="rotulo">Acabou de mudar</span>
+                  <TituloRevelado texto="Novidades na carteira" grifo="Novidades" />
+                  <p className="texto-apoio" style={{ marginTop: 18 }}>
+                    Preço revisto, fotos novas, condição de pagamento diferente. Estes são os
+                    últimos imóveis que se mexeram por aqui — e imóvel que acabou de se mexer
+                    costuma ser o que ainda tem conversa.
+                  </p>
                 </div>
+                <Link className="link-seta" href="/imoveis">
+                  Ver toda a carteira
+                  <IconeSeta />
+                </Link>
               </div>
             </Revelar>
 
             <Revelar efeito="mascara">
-              <Esteira rotulo="Buscas mais procuradas">
-                {procurados.map((p) => (
-                  <Link key={p.href} href={p.href} className="cartao-busca">
-                    <span className="cartao-busca-fundo" data-cover={p.cover} aria-hidden="true" />
-                    <span className="cartao-busca-texto">
-                      <strong>{p.rotulo}</strong>
-                      <small>{p.apoio}</small>
-                    </span>
-                  </Link>
-                ))}
-              </Esteira>
+              <BrilhoPonteiro>
+                <Esteira rotulo="Imóveis atualizados recentemente">
+                  {atualizados.map((imovel) => (
+                    <CartaoImovel key={imovel.id} imovel={imovel} />
+                  ))}
+                </Esteira>
+              </BrilhoPonteiro>
             </Revelar>
           </div>
         </section>
@@ -325,29 +334,6 @@ const DIFERENCIAIS = [
       'Condomínio, IPTU e custo mensal aparecem na ficha antes de você perguntar. Preferimos perder uma visita a perder a confiança na reta final.',
   },
 ];
-
-/**
- * Buscas prontas montadas a partir dos bairros com mais imoveis.
- *
- * Cruza os tres tipos mais comuns com os bairros mais cheios, o que
- * mostra bairro por bairro, com a contagem real de cada um. Uma lista
- * escrita a mao envelheceria: bastaria a importacao trazer um bairro
- * novo para o bloco ficar apontando para o passado.
- *
- * Antes isto cruzava bairro com tipo, pegando o i-esimo bairro e o
- * i-esimo tipo da lista. O cruzamento era arbitrario: saia "Studios em
- * Zona Rural", que nao existe, e o cartao levava a uma busca vazia. O
- * bairro sozinho e sempre verdadeiro, e e assim que a procura comeca de
- * fato — pelo lugar, e so depois pelo tipo.
- */
-function montarProcurados(facetas: Facetas) {
-  return facetas.bairros.slice(0, 8).map((b, i) => ({
-    rotulo: b.valor,
-    apoio: `${b.total} ${b.total === 1 ? 'imóvel' : 'imóveis'}`,
-    href: `/imoveis?bairro=${encodeURIComponent(b.valor)}`,
-    cover: `cv${(i % 6) + 1}`,
-  }));
-}
 
 /**
  * Carrega do banco, ou da demonstracao, ou desiste em silencio.
