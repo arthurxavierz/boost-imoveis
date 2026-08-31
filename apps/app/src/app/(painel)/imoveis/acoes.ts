@@ -2,7 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { alterarImovelDemo, excluirImovelDemo, salvarImovelDemo } from '@/lib/dados-demo';
+import {
+  alterarImovelDemo,
+  excluirImovelDemo,
+  imoveisDemo,
+  salvarImovelDemo,
+} from '@/lib/dados-demo';
 import { modoDemo } from '@/lib/demonstracao';
 import { exigirUsuario } from '@/lib/sessao';
 import { supabaseServidor } from '@/lib/supabase-servidor';
@@ -11,6 +16,30 @@ export interface EstadoAcao {
   ok: boolean;
   erro?: string;
   mensagem?: string;
+}
+
+/**
+ * Resultado de uma ação em lote.
+ *
+ * Em lote, "deu certo" e "deu errado" deixam de ser sim ou não: parte
+ * dos imóveis passa e parte esbarra na RLS, na situação ou numa
+ * negociação aberta. Por isso a tela precisa dos números, não só de um
+ * booleano — é a diferença entre "12 publicados" e "12 publicados, 3
+ * na carteira de outro consultor".
+ */
+export interface EstadoLote {
+  ok: boolean;
+  sucesso: number;
+  falha: number;
+  erro?: string;
+  mensagem?: string;
+}
+
+/** Limite de segurança: a seleção "todos" não deve virar uma query gigante. */
+const LIMITE_LOTE = 500;
+
+function normalizarIds(ids: string[]): string[] {
+  return [...new Set(ids.map((id) => String(id).trim()).filter(Boolean))].slice(0, LIMITE_LOTE);
 }
 
 const FINALIDADES = ['venda', 'locacao', 'venda_locacao'];
@@ -191,6 +220,169 @@ export async function atribuirCorretor(id: string, corretorId: string): Promise<
 
   revalidatePath('/imoveis');
   return { ok: true, mensagem: 'Imóvel transferido.' };
+}
+
+/**
+ * Publicar ou tirar do ar em lote.
+ *
+ * O caso de uso que pediu esta função: a carteira chega importada, com
+ * dezenas de imóveis fora do ar, e alguém precisa colocar tudo no ar de
+ * uma vez — não clicar "No ar" cinquenta vezes.
+ *
+ * Publicar só vale para imóvel disponível. Um vendido ou inativo que
+ * fosse ao ar junto colocaria na vitrine algo que não está à venda, e é
+ * a mesma regra que `mudarStatusImovel` já aplica ao tirar da vitrine o
+ * que muda de situação. Por isso o filtro `.eq('status', 'disponivel')`
+ * mora aqui, no servidor, e não na tela: vale para qualquer chamador.
+ *
+ * A RLS do banco decide o resto. O update com `.in(...)` só toca as
+ * linhas que este usuário pode gerenciar, e o `.select('id')` devolve
+ * exatamente quais passaram — é assim que a tela sabe dizer quantos
+ * ficaram de fora por serem de outro consultor.
+ */
+export async function publicarEmLote(ids: string[], publicado: boolean): Promise<EstadoLote> {
+  const usuario = await exigirUsuario();
+
+  const alvos = normalizarIds(ids);
+  if (alvos.length === 0) return { ok: false, sucesso: 0, falha: 0, erro: 'Nenhum imóvel selecionado.' };
+
+  if (modoDemo()) {
+    const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+    const porId = new Map(imoveisDemo().map((i) => [i.id, i]));
+    let sucesso = 0;
+    let falha = 0;
+
+    for (const id of alvos) {
+      const imovel = porId.get(id);
+      if (!imovel) {
+        falha += 1;
+        continue;
+      }
+      // Publicar só o que está disponível, e só o que é meu (ou sou gestão).
+      if (publicado && imovel.status !== 'disponivel') {
+        falha += 1;
+        continue;
+      }
+      if (!gestor && imovel.corretor_id !== usuario.id) {
+        falha += 1;
+        continue;
+      }
+      const r = alterarImovelDemo(usuario, id, { publicado });
+      if (r.ok) sucesso += 1;
+      else falha += 1;
+    }
+
+    atualizarImoveis();
+    return montarResultadoLote(publicado ? 'publicar' : 'retirar', sucesso, falha);
+  }
+
+  const supabase = await supabaseServidor();
+
+  let consulta = supabase.from('imoveis').update({ publicado }).in('id', alvos);
+  if (publicado) consulta = consulta.eq('status', 'disponivel');
+
+  const { data, error } = await consulta.select('id');
+
+  if (error) {
+    console.error('[imoveis] falha ao publicar em lote:', error);
+    return { ok: false, sucesso: 0, falha: alvos.length, erro: traduzirErro(error.message) };
+  }
+
+  const sucesso = data?.length ?? 0;
+  atualizarImoveis();
+  return montarResultadoLote(publicado ? 'publicar' : 'retirar', sucesso, alvos.length - sucesso);
+}
+
+/**
+ * Exclusão em lote.
+ *
+ * Só a gestão, mesma regra da exclusão avulsa. E a mesma trava: imóvel
+ * com negociação aberta não sai — a comissão pendurada nele precisa de
+ * origem no fim do mês. Em vez de recusar o lote inteiro por causa de um,
+ * separamos os bloqueados, excluímos o resto e devolvemos a contagem,
+ * para a pessoa saber que dois dos quinze ficaram e por quê.
+ */
+export async function excluirEmLote(ids: string[]): Promise<EstadoLote> {
+  const usuario = await exigirUsuario();
+
+  if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+    return { ok: false, sucesso: 0, falha: 0, erro: 'Apenas a gestão exclui imóveis em definitivo.' };
+  }
+
+  const alvos = normalizarIds(ids);
+  if (alvos.length === 0) return { ok: false, sucesso: 0, falha: 0, erro: 'Nenhum imóvel selecionado.' };
+
+  if (modoDemo()) {
+    let sucesso = 0;
+    let falha = 0;
+    for (const id of alvos) {
+      const r = excluirImovelDemo(usuario, id);
+      if (r.ok) sucesso += 1;
+      else falha += 1;
+    }
+    atualizarImoveis();
+    return montarResultadoLote('excluir', sucesso, falha);
+  }
+
+  const supabase = await supabaseServidor();
+
+  const { data: negociando, error: erroVenda } = await supabase
+    .from('vendas')
+    .select('imovel_id')
+    .in('imovel_id', alvos)
+    .not('status', 'in', '(cancelada,concluida)');
+
+  if (erroVenda) {
+    console.error('[imoveis] falha ao verificar negociações do lote:', erroVenda);
+    return { ok: false, sucesso: 0, falha: alvos.length, erro: 'Não foi possível verificar as negociações agora.' };
+  }
+
+  const bloqueados = new Set((negociando ?? []).map((v) => v.imovel_id as string));
+  const excluir = alvos.filter((id) => !bloqueados.has(id));
+
+  let sucesso = 0;
+  if (excluir.length > 0) {
+    const { data, error } = await supabase.from('imoveis').delete().in('id', excluir).select('id');
+    if (error) {
+      console.error('[imoveis] falha ao excluir em lote:', error);
+      return { ok: false, sucesso: 0, falha: alvos.length, erro: traduzirErro(error.message) };
+    }
+    sucesso = data?.length ?? 0;
+  }
+
+  atualizarImoveis();
+  return montarResultadoLote('excluir', sucesso, alvos.length - sucesso);
+}
+
+/** Monta a mensagem de um lote a partir das contagens, sem repetir texto em cada ação. */
+function montarResultadoLote(
+  acao: 'publicar' | 'retirar' | 'excluir',
+  sucesso: number,
+  falha: number,
+): EstadoLote {
+  const rotulo = { publicar: 'publicado', retirar: 'retirado do ar', excluir: 'excluído' }[acao];
+  const rotuloPlural = { publicar: 'publicados', retirar: 'retirados do ar', excluir: 'excluídos' }[acao];
+
+  if (sucesso === 0) {
+    const motivo =
+      acao === 'publicar'
+        ? 'Verifique se estão disponíveis e na sua carteira.'
+        : acao === 'excluir'
+          ? 'Podem ter negociação em andamento.'
+          : 'Podem estar na carteira de outro consultor.';
+    return { ok: false, sucesso, falha, erro: `Nenhum imóvel ${rotulo}. ${motivo}` };
+  }
+
+  const base = sucesso === 1 ? `1 imóvel ${rotulo}` : `${sucesso} imóveis ${rotuloPlural}`;
+  const publicado = acao === 'publicar' ? ' Aparece no site em até 5 minutos.' : '';
+  const restante =
+    falha > 0
+      ? ` ${falha} ${falha === 1 ? 'ficou de fora' : 'ficaram de fora'}${
+          acao === 'excluir' ? ' por ter negociação aberta' : ''
+        }.`
+      : '';
+
+  return { ok: true, sucesso, falha, mensagem: `${base}.${publicado}${restante}` };
 }
 
 
