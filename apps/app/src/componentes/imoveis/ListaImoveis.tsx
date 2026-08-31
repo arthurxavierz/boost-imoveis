@@ -34,7 +34,10 @@ import {
   alternarDestaque,
   alternarPublicacao,
   atribuirCorretor,
+  excluirEmLote,
   mudarStatusImovel,
+  publicarEmLote,
+  type EstadoLote,
 } from '@/app/(painel)/imoveis/acoes';
 import { GavetaImovel } from './GavetaImovel';
 
@@ -99,6 +102,7 @@ export function ListaImoveis({
   const [abertoId, setAbertoId] = useState<string | null>(parametros.imovel ?? null);
   const [criandoNovo, setCriandoNovo] = useState(false);
   const [recado, setRecado] = useState<{ texto: string; erro?: boolean } | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set());
 
   const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
 
@@ -137,6 +141,38 @@ export function ListaImoveis({
 
   const semProprietario = imoveis.filter((i) => !i.proprietario_id).length;
 
+  /**
+   * Só entra na seleção o que este usuário pode de fato gerenciar. Um
+   * consultor não marca o imóvel de outro, então a caixa nem aparece
+   * nessas linhas — e a seleção nunca carrega um id que a ação do
+   * servidor devolveria como "falha" por RLS.
+   */
+  const elegiveis = useMemo(
+    () => new Set(filtrados.filter((i) => podeGerenciarImovel(usuario, i)).map((i) => i.id)),
+    [filtrados, usuario],
+  );
+
+  /**
+   * A seleção sobrevive à troca de filtro, mas agir sobre o que sumiu da
+   * tela confunde. Então só age sobre o que está visível e elegível
+   * agora — o resto fica guardado, e reaparece marcado se o filtro voltar.
+   */
+  const selecionadosAtivos = useMemo(
+    () => [...selecionados].filter((id) => elegiveis.has(id)),
+    [selecionados, elegiveis],
+  );
+
+  const totalSelecionado = selecionadosAtivos.length;
+  const todosMarcados = elegiveis.size > 0 && totalSelecionado === elegiveis.size;
+  const parcialMarcado = totalSelecionado > 0 && totalSelecionado < elegiveis.size;
+
+  const refSelecionarTodos = useCallback(
+    (el: HTMLInputElement | null) => {
+      if (el) el.indeterminate = parcialMarcado;
+    },
+    [parcialMarcado],
+  );
+
   const avisar = useCallback((texto: string, erro = false) => setRecado({ texto, erro }), []);
 
   function executar(acao: Promise<{ ok: boolean; erro?: string; mensagem?: string }>) {
@@ -145,6 +181,49 @@ export function ListaImoveis({
       avisar(r.ok ? (r.mensagem ?? 'Atualizado.') : (r.erro ?? 'Falha.'), !r.ok);
       router.refresh();
     });
+  }
+
+  function executarLote(acao: Promise<EstadoLote>) {
+    iniciar(async () => {
+      const r = await acao;
+      avisar(r.ok ? (r.mensagem ?? 'Pronto.') : (r.erro ?? 'Falha.'), !r.ok);
+      setSelecionados(new Set());
+      router.refresh();
+    });
+  }
+
+  function alternarSelecao(id: string) {
+    setSelecionados((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(id)) proximo.delete(id);
+      else proximo.add(id);
+      return proximo;
+    });
+  }
+
+  /** Marca ou desmarca todos os elegíveis da seleção atual dos filtros. */
+  function alternarTodos() {
+    setSelecionados((atual) => {
+      const proximo = new Set(atual);
+      if (todosMarcados) {
+        for (const id of elegiveis) proximo.delete(id);
+      } else {
+        for (const id of elegiveis) proximo.add(id);
+      }
+      return proximo;
+    });
+  }
+
+  function excluirSelecionados() {
+    const n = totalSelecionado;
+    const certeza = window.confirm(
+      `Excluir ${n} ${n === 1 ? 'imóvel' : 'imóveis'} em definitivo?\n\n` +
+        'O histórico de visitas vai junto e não há como desfazer. ' +
+        'Imóvel com negociação em andamento é mantido automaticamente.\n\n' +
+        'Para apenas tirar do site sem perder o registro, use "Tirar do ar".',
+    );
+    if (!certeza) return;
+    executarLote(excluirEmLote(selecionadosAtivos));
   }
 
   function mudar<C extends keyof FiltroCarteira>(campo: C, valor: FiltroCarteira[C]) {
@@ -477,6 +556,52 @@ export function ListaImoveis({
           </div>
         )}
 
+        {totalSelecionado > 0 && (
+          <div className="barra-lote" role="region" aria-label="Ações em lote">
+            <div className="barra-lote-info">
+              <strong>
+                {totalSelecionado} {totalSelecionado === 1 ? 'selecionado' : 'selecionados'}
+              </strong>
+              <button
+                className="botao-texto"
+                onClick={() => setSelecionados(new Set())}
+                disabled={pendente}
+              >
+                Limpar seleção
+              </button>
+            </div>
+
+            <div className="barra-lote-acoes">
+              <button
+                className="btn btn-pequeno"
+                onClick={() => executarLote(publicarEmLote(selecionadosAtivos, true))}
+                disabled={pendente}
+                title="Colocar os selecionados no ar. Só publica os que estão disponíveis."
+              >
+                Colocar no ar
+              </button>
+              <button
+                className="btn btn-claro btn-pequeno"
+                onClick={() => executarLote(publicarEmLote(selecionadosAtivos, false))}
+                disabled={pendente}
+                title="Retirar os selecionados da vitrine"
+              >
+                Tirar do ar
+              </button>
+              {gestor && (
+                <button
+                  className="btn btn-perigo btn-pequeno"
+                  onClick={excluirSelecionados}
+                  disabled={pendente}
+                  title="Excluir os selecionados em definitivo"
+                >
+                  Excluir
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {filtrados.length === 0 ? (
           <div className="vazio">
             <IconeVazio />
@@ -506,7 +631,19 @@ export function ListaImoveis({
               <table className="tabela tabela-responsiva">
                 <thead>
                   <tr>
-                    <th>Imóvel</th>
+                    <th>
+                      <label className="rotulo-selecao-todos">
+                        <input
+                          type="checkbox"
+                          ref={refSelecionarTodos}
+                          checked={todosMarcados}
+                          onChange={alternarTodos}
+                          disabled={elegiveis.size === 0 || pendente}
+                          aria-label="Selecionar todos os imóveis desta seleção"
+                        />
+                        Imóvel
+                      </label>
+                    </th>
                     <th>Proprietário</th>
                     <th>Situação</th>
                     <th className="numerico">Valor</th>
@@ -526,18 +663,34 @@ export function ListaImoveis({
                     return (
                       <tr key={imovel.id}>
                         <td data-rotulo="Imóvel" className="celula-principal">
-                          <button
-                            className="botao-texto"
-                            onClick={() => setAbertoId(imovel.id)}
-                            title="Abrir a ficha do imóvel"
-                          >
-                            {imovel.titulo}
-                          </button>
-                          <span className="celula-apoio">
-                            {imovel.codigo} · {imovel.tipo}
-                            {imovel.bairro && ` · ${imovel.bairro}`}
-                            {imovel.area_util > 0 && ` · ${fmtArea(imovel.area_util)}`}
-                          </span>
+                          <div className="celula-com-selecao">
+                            {editavel ? (
+                              <input
+                                type="checkbox"
+                                className="marca-linha"
+                                checked={selecionados.has(imovel.id)}
+                                onChange={() => alternarSelecao(imovel.id)}
+                                disabled={pendente}
+                                aria-label={`Selecionar ${imovel.titulo}`}
+                              />
+                            ) : (
+                              <span className="marca-linha-vazia" aria-hidden="true" />
+                            )}
+                            <span className="celula-com-selecao-texto">
+                              <button
+                                className="botao-texto"
+                                onClick={() => setAbertoId(imovel.id)}
+                                title="Abrir a ficha do imóvel"
+                              >
+                                {imovel.titulo}
+                              </button>
+                              <span className="celula-apoio">
+                                {imovel.codigo} · {imovel.tipo}
+                                {imovel.bairro && ` · ${imovel.bairro}`}
+                                {imovel.area_util > 0 && ` · ${fmtArea(imovel.area_util)}`}
+                              </span>
+                            </span>
+                          </div>
                         </td>
 
                         <td data-rotulo="Proprietário">
