@@ -26,14 +26,23 @@ export const dynamic = 'force-dynamic';
  * dizia "461 imóveis fora da vitrine" apontando para uma tela onde
  * nenhum deles existia.
  *
- * Duas defesas contra isso voltar. O teto agora é o mesmo de
+ * Só subir o número não resolveria, e por pouco: o PostgREST corta
+ * toda resposta em mil linhas (db-max-rows), então um .limit(2000)
+ * devolve mil e cala. Com 964 imóveis isso passaria despercebido hoje e
+ * voltaria a esconder carteira no dia em que a importação trouxesse a
+ * milésima primeira. Por isso a leitura vai paginada, em faixas de mil.
+ *
+ * Duas defesas contra o corte silencioso. O teto é o mesmo de
  * lib/indicadores.ts, folgado para esta imobiliária; e quando ele for
- * atingido a tela avisa, em vez de esconder o resto em silêncio.
- * Quando 2000 não bastar, o caminho é paginar no servidor — mas aí os
- * filtros desta tela, que hoje trabalham sobre a carteira inteira em
- * memória, precisam ir junto para o banco.
+ * atingido a tela avisa, em vez de esconder o resto sem dizer nada.
+ * Quando 2000 não bastar, o caminho é levar filtro e paginação para o
+ * banco — mas aí os filtros desta tela, que hoje trabalham sobre a
+ * carteira inteira em memória, precisam ir junto.
  */
 const LIMITE_CARTEIRA = 2000;
+
+/** Teto de linhas por resposta do PostgREST. Não adianta pedir mais. */
+const LINHAS_POR_PAGINA = 1000;
 
 export default async function PaginaImoveis({
   searchParams,
@@ -69,28 +78,15 @@ export default async function PaginaImoveis({
    * sensível de dezenas de pessoas no HTML de uma tela que só queria
    * mostrar um nome.
    */
-  const [imoveis, proprietarios, equipe] = await Promise.all([
-    // O desempate por código não é enfeite: uma ação em lote grava o
-    // mesmo atualizado_em em centenas de linhas de uma vez, e ordenar
-    // só por ele deixa essas linhas empatadas. Empate no Postgres não
-    // tem ordem garantida, então a mesma tela recarregada duas vezes
-    // podia trazer conjuntos diferentes ao bater no teto.
-    supabase
-      .from('imoveis')
-      .select('*')
-      .order('atualizado_em', { ascending: false })
-      .order('codigo', { ascending: true })
-      .limit(LIMITE_CARTEIRA),
+  const [carteira, proprietarios, equipe] = await Promise.all([
+    carregarCarteira(supabase),
     supabase.from('proprietarios').select('id, nome').order('nome'),
     supabase.from('perfis').select('*').eq('ativo', true).order('nome'),
   ]);
 
-  if (imoveis.error) console.error('[imoveis] falha ao carregar:', imoveis.error);
   if (proprietarios.error) {
     console.error('[imoveis] falha ao carregar proprietários:', proprietarios.error);
   }
-
-  const carteira = (imoveis.data ?? []) as (Imovel & { busca?: unknown })[];
 
   return (
     <ListaImoveis
@@ -102,6 +98,52 @@ export default async function PaginaImoveis({
       truncada={carteira.length >= LIMITE_CARTEIRA}
     />
   );
+}
+
+/**
+ * Lê a carteira inteira, em faixas de mil linhas.
+ *
+ * A paginação existe por causa do teto do PostgREST, não por causa do
+ * volume: pedir 2000 de uma vez devolve 1000 sem erro nenhum, e um
+ * corte que não avisa é exatamente o que causou o problema que esta
+ * tela acabou de ter.
+ *
+ * O `.order` repetido em toda faixa não é redundância. Paginar por
+ * intervalo só é coerente sobre uma ordenação estável, e atualizado_em
+ * sozinho não é: uma ação em lote grava o mesmo instante em centenas de
+ * linhas, e empate no Postgres não tem ordem definida — sem o desempate
+ * por código, a mesma linha poderia vir duas vezes numa faixa e sumir
+ * na outra.
+ */
+async function carregarCarteira(
+  supabase: Awaited<ReturnType<typeof supabaseServidor>>,
+): Promise<(Imovel & { busca?: unknown })[]> {
+  const carteira: (Imovel & { busca?: unknown })[] = [];
+
+  while (carteira.length < LIMITE_CARTEIRA) {
+    const de = carteira.length;
+    const ate = Math.min(de + LINHAS_POR_PAGINA, LIMITE_CARTEIRA) - 1;
+
+    const { data, error } = await supabase
+      .from('imoveis')
+      .select('*')
+      .order('atualizado_em', { ascending: false })
+      .order('codigo', { ascending: true })
+      .range(de, ate);
+
+    if (error) {
+      console.error('[imoveis] falha ao carregar a partir de', de, error);
+      break;
+    }
+
+    const faixa = (data ?? []) as (Imovel & { busca?: unknown })[];
+    carteira.push(...faixa);
+
+    // Faixa incompleta significa fim da carteira, e não erro.
+    if (faixa.length < ate - de + 1) break;
+  }
+
+  return carteira;
 }
 
 /**
