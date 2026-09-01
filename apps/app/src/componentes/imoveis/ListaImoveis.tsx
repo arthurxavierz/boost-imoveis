@@ -81,12 +81,15 @@ export function ListaImoveis({
   proprietarios,
   equipe,
   parametros,
+  truncada = false,
 }: {
   usuario: Perfil;
   imoveis: Imovel[];
   proprietarios: Pick<Proprietario, 'id' | 'nome'>[];
   equipe: Perfil[];
   parametros: { imovel?: string; proprietario?: string; 'sem-proprietario'?: string };
+  /** A consulta bateu no teto de linhas: existe carteira além desta tela. */
+  truncada?: boolean;
 }) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
@@ -270,6 +273,21 @@ export function ListaImoveis({
             alerta={semProprietario > 0}
           />
         </div>
+
+        {/* Sem este aviso o corte volta a ser invisível: a tela mostra
+            uma carteira aparentemente inteira, e os imóveis que ficaram
+            de fora só aparecem como número numa pendência que aponta
+            para cá. */}
+        {truncada && (
+          <div className="aviso aviso-atencao" style={{ marginBottom: 18 }}>
+            <IconeAlerta />
+            <span>
+              A carteira passou do teto desta tela e nem todos os imóveis estão carregados aqui.
+              Os filtros e a seleção em lote só alcançam o que está nesta lista. Avise o
+              desenvolvimento para paginar a consulta.
+            </span>
+          </div>
+        )}
 
         <div className="filtros-barra">
           <div className="busca-rapida">
