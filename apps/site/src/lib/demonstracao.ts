@@ -20,6 +20,7 @@ export {
   facetasVitrine,
   imovelPorSlug,
   imoveisPorIds,
+  loteDestaqueVitrine,
   recentesVitrine,
   registrarLeadDemo,
   semelhantesVitrine,

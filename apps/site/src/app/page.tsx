@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
-import { buscarAtualizados, buscarDestaques, buscarRecentes } from '@boost/db';
+import { buscarDestaques, buscarLoteDestaque, buscarRecentes } from '@boost/db';
 
 import { BrilhoPonteiro } from '@/componentes/BrilhoPonteiro';
 import { BuscaHero } from '@/componentes/BuscaHero';
@@ -14,12 +14,13 @@ import { Newsletter } from '@/componentes/Newsletter';
 import { Revelar } from '@/componentes/Revelar';
 import { SecaoHero } from '@/componentes/SecaoHero';
 import { TituloRevelado } from '@/componentes/TituloRevelado';
+import { VitrineDestaque } from '@/componentes/VitrineDestaque';
 import { IconeCasa, IconeSeta, IconeWhatsApp } from '@/componentes/Icones';
 import { carregarCondominios, carregarFacetas } from '@/lib/dados';
 import { imagemDoHero } from '@/lib/hero';
 import {
-  atualizadosVitrine,
   destaquesVitrine,
+  loteDestaqueVitrine,
   recentesVitrine,
   semBanco,
 } from '@/lib/demonstracao';
@@ -35,10 +36,10 @@ import { supabase } from '@/lib/supabase';
 export const revalidate = 300;
 
 export default async function PaginaInicial() {
-  const [destaques, recentes, atualizados, condominios, facetas] = await Promise.all([
+  const [destaques, recentes, loteDestaque, condominios, facetas] = await Promise.all([
     carregar(() => buscarDestaques(supabase(), 8), () => destaquesVitrine(8), []),
     carregar(() => buscarRecentes(supabase(), 8), () => recentesVitrine(8), []),
-    carregar(() => buscarAtualizados(supabase(), 10), () => atualizadosVitrine(10), []),
+    carregar(() => buscarLoteDestaque(supabase(), 36), () => loteDestaqueVitrine(36), []),
     carregarCondominios({ limite: 10 }),
     carregarFacetas(),
   ]);
@@ -196,19 +197,18 @@ export default async function PaginaInicial() {
         </section>
       )}
 
-      {/* ---------- NOVIDADES DA CARTEIRA ---------- */}
-      {atualizados.length > 0 && (
+      {/* ---------- IMOVEIS EM DESTAQUE ---------- */}
+      {loteDestaque.length > 0 && (
         <section className="secao">
           <div className="container">
             <Revelar>
               <div className="cabecalho-secao">
                 <div>
-                  <span className="rotulo">Acabou de mudar</span>
-                  <TituloRevelado texto="Novidades na carteira" grifo="Novidades" />
+                  <span className="rotulo">Seleção da casa</span>
+                  <TituloRevelado texto="Imóveis em destaque" grifo="destaque" />
                   <p className="texto-apoio" style={{ marginTop: 18 }}>
-                    Preço revisto, fotos novas, condição de pagamento diferente. Estes são os
-                    últimos imóveis que se mexeram por aqui — e imóvel que acabou de se mexer
-                    costuma ser o que ainda tem conversa.
+                    Uma amostra da carteira, sorteada a cada visita. Recarregue a página e a
+                    seleção muda.
                   </p>
                 </div>
                 <Link className="link-seta" href="/imoveis">
@@ -218,15 +218,15 @@ export default async function PaginaInicial() {
               </div>
             </Revelar>
 
-            <Revelar efeito="mascara">
-              <BrilhoPonteiro>
-                <Esteira rotulo="Imóveis atualizados recentemente">
-                  {atualizados.map((imovel) => (
-                    <CartaoImovel key={imovel.id} imovel={imovel} />
-                  ))}
-                </Esteira>
-              </BrilhoPonteiro>
-            </Revelar>
+            {/* Sem <Revelar> em volta do trilho, de propósito. Envolvido
+                pelo efeito de máscara, este bloco ficava invisível em
+                parte das máquinas: a máscara esconde por clip-path sobre
+                uma camada que o will-change já tinha promovido para a
+                GPU, e nessa combinação alguns drivers simplesmente não
+                pintam o resultado. Aqui os cartões entram direto. */}
+            <BrilhoPonteiro>
+              <VitrineDestaque lote={loteDestaque} />
+            </BrilhoPonteiro>
           </div>
         </section>
       )}

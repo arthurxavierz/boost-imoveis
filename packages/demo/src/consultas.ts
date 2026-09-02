@@ -228,6 +228,20 @@ export function recentesVitrine(limite = 8): ImovelPublico[] {
 }
 
 /**
+ * Espelha buscarLoteDestaque: marcados primeiro, o resto da carteira
+ * publicada em seguida, do mais caro para o mais barato.
+ */
+export function loteDestaqueVitrine(limite = 36): ImovelPublico[] {
+  const disponiveis = imoveisPublicos().filter((i) => i.status === 'disponivel');
+  const porValor = (a: ImovelPublico, b: ImovelPublico) => Number(b.valor) - Number(a.valor);
+
+  const marcados = disponiveis.filter((i) => i.destaque).sort(porValor);
+  const resto = disponiveis.filter((i) => !i.destaque).sort(porValor);
+
+  return [...marcados, ...resto].slice(0, limite);
+}
+
+/**
  * Os últimos imóveis que mudaram. Espelha buscarAtualizados do banco:
  * ordena por atualizado_em, que é o que muda quando o preço cai ou entra
  * foto nova, e não por criado_em, que congela na data do cadastro.

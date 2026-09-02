@@ -3768,6 +3768,24 @@ main {
    REVELAR AO ROLAR
    ============================================================ */
 
+/* Sem will-change aqui, e a ausencia e deliberada.
+   ------------------------------------------------------------
+   Havia um "will-change: transform, opacity" nesta regra, aplicado a
+   todos os blocos revelados de todas as paginas. Ele cobrou caro duas
+   vezes:
+
+   1. will-change de transform cria bloco de contencao. O visor de fotos
+      em tela cheia, que e position: fixed, passou a se prender a div do
+      <Revelar> em vez da janela, e abria do tamanho da galeria.
+
+   2. Promove cada bloco para camada propria na GPU. Combinado com o
+      clip-path do efeito de mascara, uma secao inteira da home ficou
+      invisivel em parte das maquinas e normal em outras, que e a
+      assinatura tipica de problema de compositor.
+
+   A propria especificacao pede para nao espalhar will-change por muitos
+   elementos: e uma dica pontual para um elemento que vai animar agora,
+   nao um adorno de folha de estilo. A transicao roda igual sem ele. */
 .revelar {
   opacity: 0;
   transform: translate3d(0, 32px, 0) scale(0.985);
@@ -3776,7 +3794,6 @@ main {
     transform 0.9s var(--curva),
     clip-path 0.9s var(--curva);
   transition-delay: var(--atraso, 0ms);
-  will-change: transform, opacity;
 }
 
 .revelar-lado {

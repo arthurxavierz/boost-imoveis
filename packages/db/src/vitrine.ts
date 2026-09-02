@@ -182,6 +182,62 @@ export async function buscarRecentes(cliente: Cliente, limite = 8): Promise<Imov
 }
 
 /**
+ * Lote de onde a home sorteia a vitrine de destaque.
+ *
+ * Traz primeiro quem esta marcado como destaque e completa com o resto
+ * da carteira publicada, dos mais caros para os mais baratos. Os dois
+ * comportamentos importam: hoje ninguem marcou nada, e uma secao que
+ * dependesse so da marcacao apareceria vazia; e quando a equipe comecar
+ * a marcar, o que ela escolheu entra na frente sem precisar mexer aqui.
+ *
+ * O lote e grande de proposito. Quem sorteia sete e a tela, a cada
+ * carregamento, e sortear de um conjunto de sete nao sortearia nada.
+ *
+ * So a foto de capa vem junto. O album inteiro seriam dezesseis fotos
+ * por imovel, e num lote de trinta e seis isso passa de quinhentas
+ * linhas para alimentar trinta e seis miniaturas — sem contar que o
+ * PostgREST corta a resposta em mil linhas, entao um lote maior comecaria
+ * a perder foto no fim da lista, em silencio.
+ */
+export async function buscarLoteDestaque(
+  cliente: Cliente,
+  limite = 36,
+): Promise<ImovelPublico[]> {
+  const { data: marcados, error: erroMarcados } = await cliente
+    .from(VIEW)
+    .select('*')
+    .eq('destaque', true)
+    .eq('status', 'disponivel')
+    .order('valor', { ascending: false })
+    .limit(limite);
+  if (erroMarcados) throw erroMarcados;
+
+  const lote = (marcados ?? []) as ImovelPublico[];
+
+  if (lote.length < limite) {
+    let completar = cliente
+      .from(VIEW)
+      .select('*')
+      .eq('status', 'disponivel')
+      .order('valor', { ascending: false })
+      .limit(limite - lote.length);
+
+    // Sem isto os marcados voltariam duplicados no complemento.
+    if (lote.length > 0) {
+      completar = completar.not('id', 'in', `(${lote.map((i) => i.id).join(',')})`);
+    }
+
+    const { data: resto, error: erroResto } = await completar;
+    if (erroResto) throw erroResto;
+
+    lote.push(...((resto ?? []) as ImovelPublico[]));
+  }
+
+  await anexarCapas(cliente, lote);
+  return lote;
+}
+
+/**
  * Os ultimos imoveis que mudaram, para o carrossel de novidades da home.
  *
  * Ordena por atualizado_em, e nao por criado_em como buscarRecentes.
@@ -420,6 +476,41 @@ async function anexarFotos(cliente: Cliente, imoveis: ImovelPublico[]): Promise<
     const lista = porImovel.get(foto.imovel_id) ?? [];
     lista.push(foto);
     porImovel.set(foto.imovel_id, lista);
+  }
+
+  for (const imovel of imoveis) {
+    imovel.fotos = porImovel.get(imovel.id) ?? [];
+  }
+}
+
+/**
+ * Anexa apenas a foto de capa de cada imovel.
+ *
+ * O cartao da vitrine chama urlCapa(), que se contenta com uma foto so.
+ * Buscar o album inteiro para desenhar uma miniatura multiplica por
+ * dezesseis o numero de linhas lidas, e encosta no teto de mil da
+ * resposta assim que o lote cresce.
+ *
+ * Imovel sem capa marcada fica com a lista vazia e cai no fundo neutro
+ * do cartao, que e o mesmo caminho de quem nao tem foto nenhuma.
+ */
+async function anexarCapas(cliente: Cliente, imoveis: ImovelPublico[]): Promise<void> {
+  if (imoveis.length === 0) return;
+
+  const { data, error } = await cliente
+    .from('imovel_fotos')
+    .select('*')
+    .eq('capa', true)
+    .in(
+      'imovel_id',
+      imoveis.map((i) => i.id),
+    );
+
+  if (error) throw error;
+
+  const porImovel = new Map<string, Foto[]>();
+  for (const foto of (data ?? []) as Foto[]) {
+    porImovel.set(foto.imovel_id, [foto]);
   }
 
   for (const imovel of imoveis) {

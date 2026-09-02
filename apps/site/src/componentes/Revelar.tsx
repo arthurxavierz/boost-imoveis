@@ -80,7 +80,30 @@ export function Revelar({
     );
 
     observador.observe(elemento);
-    return () => observador.disconnect();
+
+    /**
+     * Rede de seguranca.
+     *
+     * Uma secao da home ficou invisivel em algumas maquinas e normal em
+     * outras, e o mais provavel era problema de pintura na GPU. Mas
+     * "mais provavel" nao e diagnostico, e enquanto a causa nao for
+     * certa vale garantir o resultado: passado um tempo, se o elemento
+     * estiver dentro da janela e ainda escondido, ele aparece na marra.
+     *
+     * A conferencia da posicao e o que impede a rede de virar um botao
+     * de revelar a pagina inteira: sem ela, todo bloco la embaixo
+     * apareceria junto e a revelacao por rolagem deixaria de existir.
+     */
+    const rede = setTimeout(() => {
+      const caixa = elemento.getBoundingClientRect();
+      const naTela = caixa.top < window.innerHeight && caixa.bottom > 0;
+      if (naTela) setVisivel(true);
+    }, 1500);
+
+    return () => {
+      clearTimeout(rede);
+      observador.disconnect();
+    };
   }, []);
 
   return (
