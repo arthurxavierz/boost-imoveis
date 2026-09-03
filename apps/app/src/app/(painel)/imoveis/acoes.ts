@@ -273,6 +273,60 @@ export async function buscarFichaImovel(id: string): Promise<Imovel | null> {
   return (data ?? null) as Imovel | null;
 }
 
+/**
+ * Vincula o mesmo proprietário a vários imóveis.
+ *
+ * A importação trouxe a carteira sem dono, e regularizar um por um pela
+ * gaveta é o tipo de tarefa que ninguém termina. O caminho é filtrar por
+ * "sem proprietário", marcar o que é daquela pessoa e resolver de uma
+ * vez.
+ *
+ * A RLS decide quais linhas passam, e o .select() devolve exatamente as
+ * que passaram: é assim que a tela sabe dizer quantas ficaram de fora.
+ */
+export async function vincularProprietarioEmLote(
+  ids: string[],
+  proprietarioId: string,
+): Promise<EstadoLote> {
+  const usuario = await exigirUsuario();
+
+  if (!proprietarioId) {
+    return { ok: false, sucesso: 0, falha: 0, erro: 'Escolha um proprietário.' };
+  }
+
+  const alvos = normalizarIds(ids);
+  if (alvos.length === 0) {
+    return { ok: false, sucesso: 0, falha: 0, erro: 'Nenhum imóvel selecionado.' };
+  }
+
+  if (modoDemo()) {
+    let sucesso = 0;
+    for (const id of alvos) {
+      const r = alterarImovelDemo(usuario, id, { proprietario_id: proprietarioId });
+      if (r.ok) sucesso += 1;
+    }
+    atualizarImoveis();
+    return montarResultadoLote('vincular', sucesso, alvos.length - sucesso);
+  }
+
+  const supabase = await supabaseServidor();
+
+  const { data, error } = await supabase
+    .from('imoveis')
+    .update({ proprietario_id: proprietarioId })
+    .in('id', alvos)
+    .select('id');
+
+  if (error) {
+    console.error('[imoveis] falha ao vincular proprietário em lote:', error);
+    return { ok: false, sucesso: 0, falha: alvos.length, erro: traduzirErro(error.message) };
+  }
+
+  const sucesso = data?.length ?? 0;
+  atualizarImoveis();
+  return montarResultadoLote('vincular', sucesso, alvos.length - sucesso);
+}
+
 export async function publicarEmLote(ids: string[], publicado: boolean): Promise<EstadoLote> {
   const usuario = await exigirUsuario();
 
@@ -389,12 +443,22 @@ export async function excluirEmLote(ids: string[]): Promise<EstadoLote> {
 
 /** Monta a mensagem de um lote a partir das contagens, sem repetir texto em cada ação. */
 function montarResultadoLote(
-  acao: 'publicar' | 'retirar' | 'excluir',
+  acao: 'publicar' | 'retirar' | 'excluir' | 'vincular',
   sucesso: number,
   falha: number,
 ): EstadoLote {
-  const rotulo = { publicar: 'publicado', retirar: 'retirado do ar', excluir: 'excluído' }[acao];
-  const rotuloPlural = { publicar: 'publicados', retirar: 'retirados do ar', excluir: 'excluídos' }[acao];
+  const rotulo = {
+    publicar: 'publicado',
+    retirar: 'retirado do ar',
+    excluir: 'excluído',
+    vincular: 'vinculado ao proprietário',
+  }[acao];
+  const rotuloPlural = {
+    publicar: 'publicados',
+    retirar: 'retirados do ar',
+    excluir: 'excluídos',
+    vincular: 'vinculados ao proprietário',
+  }[acao];
 
   if (sucesso === 0) {
     const motivo =

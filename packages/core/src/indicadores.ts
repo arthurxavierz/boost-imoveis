@@ -13,12 +13,20 @@
  */
 
 import type { Compromisso } from './agenda';
-import type { EtapaLead, Imovel, Interacao, Lead, OrigemLead, Perfil } from './tipos';
+import type { ImovelResumo } from './carteira';
+import type { EtapaLead, Interacao, Lead, OrigemLead, Perfil } from './tipos';
 import type { Venda } from './vendas';
 
 export interface BaseIndicadores {
   perfis: Perfil[];
-  imoveis: Imovel[];
+  /**
+   * O resumo, e nao o registro inteiro.
+   *
+   * Os indicadores leem bairro, tipo, situacao, publicado, responsavel,
+   * valor e data de cadastro. Carregar as 58 colunas para isso trazia
+   * 2,2 MB de descricao e observacao interna que nenhuma conta usa.
+   */
+  imoveis: ImovelResumo[];
   leads: Lead[];
   interacoes: Interacao[];
   compromissos: Compromisso[];

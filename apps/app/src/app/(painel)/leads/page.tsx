@@ -7,6 +7,7 @@ import { interacoesDemo, leadsDemo } from '@/lib/dados-demo';
 import { equipeDemo, modoDemo } from '@/lib/demonstracao';
 import { exigirPermissao } from '@/lib/sessao';
 import { supabaseServidor } from '@/lib/supabase-servidor';
+import { lerTudo } from '@/lib/consultas';
 
 export const metadata: Metadata = { title: 'Leads' };
 export const dynamic = 'force-dynamic';
@@ -50,28 +51,28 @@ export default async function PaginaLeads({
    * idas ao banco a cada vez que alguem abre a tela.
    */
   const [leads, equipe, interacoes] = await Promise.all([
-    supabase
-      .from('leads')
-      .select('*')
-      .order('criado_em', { ascending: false })
-      .limit(500),
+    lerTudo<Lead>((de, ate) =>
+      supabase.from('leads').select('*').order('criado_em', { ascending: false }).range(de, ate),
+    ),
     supabase.from('perfis').select('*').order('nome'),
-    supabase
-      .from('lead_interacoes')
-      .select('*')
-      .order('criado_em', { ascending: false })
-      .limit(1200),
+    // O limite de 1200 aqui era teto imaginario: o PostgREST devolve mil
+    // e cala, entao o funil perderia interacao antiga sem sinal nenhum.
+    lerTudo<Interacao>((de, ate) =>
+      supabase
+        .from('lead_interacoes')
+        .select('*')
+        .order('criado_em', { ascending: false })
+        .range(de, ate),
+    ),
   ]);
 
-  if (leads.error) console.error('[leads] falha ao carregar:', leads.error);
-  if (interacoes.error) console.error('[leads] falha no histórico:', interacoes.error);
-
+  // lerTudo ja registra a propria falha e devolve o que conseguiu ler.
   return (
     <Leads
       usuario={usuario}
-      leads={(leads.data ?? []) as Lead[]}
+      leads={leads}
       equipe={(equipe.data ?? []) as Perfil[]}
-      interacoes={(interacoes.data ?? []) as Interacao[]}
+      interacoes={interacoes}
       parametros={params}
     />
   );

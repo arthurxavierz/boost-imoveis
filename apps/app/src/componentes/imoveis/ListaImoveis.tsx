@@ -37,6 +37,8 @@ import {
   atribuirCorretor,
   buscarFichaImovel,
   excluirEmLote,
+  vincularProprietario,
+  vincularProprietarioEmLote,
   mudarStatusImovel,
   publicarEmLote,
   type EstadoLote,
@@ -616,6 +618,32 @@ export function ListaImoveis({
             </div>
 
             <div className="barra-lote-acoes">
+              {/* Vincular em lote é o caminho para o que a importação
+                  trouxe sem dono: filtra por "sem proprietário", marca
+                  tudo daquela pessoa e resolve numa vez. */}
+              {proprietarios.length > 0 && (
+                <div className="campo campo-filtro">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      executarLote(
+                        vincularProprietarioEmLote(selecionadosAtivos, e.target.value),
+                      );
+                    }}
+                    disabled={pendente}
+                    aria-label="Vincular proprietário aos imóveis marcados"
+                  >
+                    <option value="">Vincular proprietário…</option>
+                    {proprietarios.map((dono) => (
+                      <option key={dono.id} value={dono.id}>
+                        {dono.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <button
                 className="btn btn-pequeno"
                 onClick={() => executarLote(publicarEmLote(selecionadosAtivos, true))}
@@ -749,6 +777,29 @@ export function ListaImoveis({
                             >
                               {dono}
                             </button>
+                          ) : editavel && proprietarios.length > 0 ? (
+                            /* Sem dono, a célula deixa de ser um aviso e
+                               vira o conserto. A ação já existia no
+                               servidor e nada na tela chamava: para
+                               regularizar era preciso abrir a gaveta de
+                               um por um, e são dezenas de imóveis. */
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (!e.target.value) return;
+                                executar(vincularProprietario(imovel.id, e.target.value));
+                              }}
+                              disabled={pendente}
+                              aria-label={`Vincular proprietário a ${imovel.titulo}`}
+                              style={{ ...ESTILO_SELECT_CELULA, maxWidth: 190 }}
+                            >
+                              <option value="">Sem proprietário</option>
+                              {proprietarios.map((dono) => (
+                                <option key={dono.id} value={dono.id}>
+                                  {dono.nome}
+                                </option>
+                              ))}
+                            </select>
                           ) : (
                             <span className="marca-pendencia">
                               <IconeAlerta />

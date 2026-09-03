@@ -48,6 +48,8 @@ import {
 import { modoDemo } from '@/lib/demonstracao';
 import { exigirUsuario } from '@/lib/sessao';
 import { supabaseServidor } from '@/lib/supabase-servidor';
+import { lerTudo } from '@/lib/consultas';
+import type { ImovelResumo } from '@boost/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -484,19 +486,30 @@ async function carregarPendencias(
   const hoje = new Date().toISOString().slice(0, 10);
 
   const [leads, interacoes, compromissos, imoveis, parcelas] = await Promise.all([
-    supabase.from('leads').select('*').eq('arquivado', false).limit(1000),
-    supabase
-      .from('lead_interacoes')
-      .select('lead_id, criado_em, tipo, id, conteudo, autor_id, autor_nome')
-      .order('criado_em', { ascending: false })
-      .limit(2000),
+    lerTudo<Lead>((de, ate) =>
+      supabase.from('leads').select('*').eq('arquivado', false).range(de, ate),
+    ),
+    lerTudo<Interacao>((de, ate) =>
+      supabase
+        .from('lead_interacoes')
+        .select('lead_id, criado_em, tipo, id, conteudo, autor_id, autor_nome')
+        .order('criado_em', { ascending: false })
+        .range(de, ate),
+    ),
     supabase
       .from('compromissos')
       .select('*')
       .in('status', ['agendado', 'confirmado'])
       .lt('inicio', `${hoje}T00:00:00Z`)
       .limit(500),
-    supabase.from('imoveis').select('*').eq('publicado', false).limit(500),
+    // So o que a pendencia conta: situacao, responsavel e publicado.
+    lerTudo<ImovelResumo>((de, ate) =>
+      supabase
+        .from('imoveis')
+        .select('id, status, publicado, corretor_id, proprietario_id')
+        .eq('publicado', false)
+        .range(de, ate),
+    ),
     podeFinanceiro
       ? supabase
           .from('venda_parcelas')
@@ -510,9 +523,9 @@ async function carregarPendencias(
     {
       perfis: [],
       vendas: [],
-      imoveis: (imoveis.data ?? []) as Imovel[],
-      leads: (leads.data ?? []) as Lead[],
-      interacoes: (interacoes.data ?? []) as Interacao[],
+      imoveis,
+      leads,
+      interacoes,
       compromissos: (compromissos.data ?? []) as Compromisso[],
     },
     usuario,

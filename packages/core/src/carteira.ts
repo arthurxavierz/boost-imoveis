@@ -127,6 +127,7 @@ export type ImovelResumo = Pick<
   | 'destaque'
   | 'corretor_id'
   | 'proprietario_id'
+  | 'criado_em'
   | 'atualizado_em'
 >;
 
