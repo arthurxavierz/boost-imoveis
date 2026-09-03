@@ -6,8 +6,10 @@ import { sugerirParcelas, validarVenda, type Venda } from '@boost/core';
 
 import {
   baixarParcelaDemo,
+  excluirParcelaDemo,
   efeitoNoImovelDemo,
   excluirVendaDemo,
+  salvarParcelaDemo,
   salvarVendaDemo,
   statusVendaDemo,
 } from '@/lib/dados-demo';
@@ -27,6 +29,27 @@ import { supabaseServidor } from '@/lib/supabase-servidor';
  * calcula e o Postgres. Mandar esses numeros daqui seria abrir espaco
  * para a tela e o banco discordarem.
  */
+
+const DESTINOS_PARCELA = ['casa', 'consultor', 'captador', 'terceiro'] as const;
+const STATUS_PARCELA = ['pendente', 'pago', 'cancelado'] as const;
+
+type DestinoParcela = (typeof DESTINOS_PARCELA)[number];
+type StatusParcela = (typeof STATUS_PARCELA)[number];
+
+/* Conferem e estreitam o tipo no mesmo passo: o cliente do Supabase nao
+   e tipado e aceita qualquer string, mas a base de demonstracao cobra a
+   uniao de verdade. */
+function ehDestino(v: string): v is DestinoParcela {
+  return (DESTINOS_PARCELA as readonly string[]).includes(v);
+}
+
+function ehStatusParcela(v: string): v is StatusParcela {
+  return (STATUS_PARCELA as readonly string[]).includes(v);
+}
+
+function hojeISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export interface EstadoAcao {
   ok: boolean;
@@ -215,6 +238,114 @@ export async function mudarStatusVenda(
         ? 'Negócio concluído. O imóvel saiu da vitrine e a comissão foi lançada no caixa.'
         : 'Situação atualizada.',
   };
+}
+
+/**
+ * Cria ou altera uma parcela de comissao.
+ *
+ * O sistema sugere as parcelas no primeiro salvamento do negocio e
+ * depois nao mexe mais, para nao reescrever o que o financeiro ja
+ * conferiu. O comentario daquela funcao dizia que "o financeiro ajusta a
+ * mao" — so que nao havia como ajustar: a unica acao existente era dar
+ * baixa. Comissao renegociada obrigava a apagar o negocio e refazer.
+ *
+ * Quase tudo e opcional. Descricao, valor e vencimento sao o minimo que
+ * torna a linha util para a previsao de caixa; beneficiario e
+ * observacao ficam em branco sem problema.
+ */
+export async function salvarParcela(
+  _anterior: EstadoAcao,
+  dados: FormData,
+): Promise<EstadoAcao> {
+  const usuario = await exigirUsuario();
+
+  const id = texto(dados, 'id');
+  const vendaId = texto(dados, 'venda_id');
+  const descricao = texto(dados, 'descricao');
+  const valor = numero(dados, 'valor');
+  const vencimento = texto(dados, 'vencimento');
+  const destino = texto(dados, 'destino') || 'casa';
+  const status = texto(dados, 'status') || 'pendente';
+
+  if (!id && !vendaId) return { ok: false, erro: 'Escolha o negócio da parcela.' };
+  if (!descricao) return { ok: false, erro: 'Descreva a parcela.' };
+  if (valor <= 0) return { ok: false, erro: 'Informe o valor da parcela.' };
+  if (!vencimento) return { ok: false, erro: 'Informe o vencimento.' };
+
+  if (!ehDestino(destino)) return { ok: false, erro: 'Destino inválido.' };
+  if (!ehStatusParcela(status)) return { ok: false, erro: 'Situação inválida.' };
+
+  // O banco recusa parcela paga sem data, e com razao: e o que separa
+  // "o cliente disse que pagou" de "entrou na conta".
+  const pagoEm = status === 'pago' ? texto(dados, 'pago_em') || hojeISO() : null;
+
+  const registro = {
+    descricao,
+    valor,
+    vencimento,
+    destino,
+    status,
+    pago_em: pagoEm,
+    beneficiario_id: texto(dados, 'beneficiario_id') || null,
+    observacoes: texto(dados, 'observacoes') || null,
+  };
+
+  if (modoDemo()) {
+    const r = salvarParcelaDemo(usuario, { ...registro, id: id || undefined, venda_id: vendaId });
+    revalidatePath('/financeiro');
+    return r.ok
+      ? { ok: true, mensagem: id ? 'Parcela atualizada.' : 'Parcela criada.' }
+      : { ok: false, erro: r.erro };
+  }
+
+  const supabase = await supabaseServidor();
+
+  const { error } = id
+    ? await supabase.from('venda_parcelas').update(registro).eq('id', id)
+    : await supabase.from('venda_parcelas').insert({ ...registro, venda_id: vendaId });
+
+  if (error) {
+    console.error('[financeiro] falha ao salvar parcela:', error);
+    return { ok: false, erro: traduzirErro(error.message) };
+  }
+
+  revalidatePath('/financeiro');
+  revalidatePath('/');
+  return { ok: true, mensagem: id ? 'Parcela atualizada.' : 'Parcela criada.' };
+}
+
+/**
+ * Apaga uma parcela.
+ *
+ * So a gestao. Parcela e previsao de caixa e base de comissao de alguem:
+ * apagar por engano tira dinheiro do relatorio de uma pessoa sem deixar
+ * rastro. Para tirar da previsao sem perder o registro existe o caminho
+ * normal, que e marcar como cancelada.
+ */
+export async function excluirParcela(id: string): Promise<EstadoAcao> {
+  const usuario = await exigirUsuario();
+
+  if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+    return { ok: false, erro: 'Apenas a gestão exclui uma parcela.' };
+  }
+
+  if (modoDemo()) {
+    const r = excluirParcelaDemo(usuario, id);
+    revalidatePath('/financeiro');
+    return r.ok ? { ok: true, mensagem: 'Parcela excluída.' } : { ok: false, erro: r.erro };
+  }
+
+  const supabase = await supabaseServidor();
+  const { error } = await supabase.from('venda_parcelas').delete().eq('id', id);
+
+  if (error) {
+    console.error('[financeiro] falha ao excluir parcela:', error);
+    return { ok: false, erro: traduzirErro(error.message) };
+  }
+
+  revalidatePath('/financeiro');
+  revalidatePath('/');
+  return { ok: true, mensagem: 'Parcela excluída.' };
 }
 
 /** Baixa de parcela: o dinheiro entrou de fato. */

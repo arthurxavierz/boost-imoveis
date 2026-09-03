@@ -3509,6 +3509,32 @@ button {
 /* Data de/até na barra do financeiro. O rótulo fica ao lado, e não em
    cima: são dois campos curtos numa barra que já tem situação e
    contagem, e empilhar rótulo sobre campo dobraria a altura dela. */
+/* Botoes de acao em linha de tabela: baixa, editar e excluir lado a
+   lado sem quebrar a coluna. */
+.celula-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.celula-acoes .btn-icone {
+  width: 34px;
+  height: 34px;
+  color: var(--cinza);
+}
+
+.celula-acoes .btn-icone:hover {
+  color: var(--marinho-700);
+  background: var(--marinho-50);
+}
+
+/* O editor de parcela abre no meio da lista, e o contorno em ouro diz
+   que aquele bloco esta esperando uma acao. */
+.editor-parcela {
+  border-color: var(--ouro-500);
+}
+
 .campo-periodo {
   display: flex;
   align-items: center;

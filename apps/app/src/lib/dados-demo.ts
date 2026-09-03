@@ -179,6 +179,50 @@ export function vendasDemo(status?: string, de?: string, ate?: string): VendaDet
     }));
 }
 
+/** Espelha salvarParcela na base de demonstração. */
+export function salvarParcelaDemo(
+  usuario: Perfil,
+  dados: Partial<VendaParcela> & { id?: string; venda_id?: string },
+): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    if (dados.id) {
+      const parcela = base.parcelas.find((p) => p.id === dados.id);
+      if (!parcela) return { ok: false, erro: 'Parcela não encontrada.' };
+      Object.assign(parcela, dados);
+      return { ok: true };
+    }
+
+    if (!dados.venda_id) return { ok: false, erro: 'Escolha o negócio da parcela.' };
+
+    base.parcelas.push({
+      id: novoId(),
+      venda_id: dados.venda_id,
+      descricao: dados.descricao ?? 'Parcela',
+      beneficiario_id: dados.beneficiario_id ?? null,
+      destino: dados.destino ?? 'casa',
+      valor: Number(dados.valor ?? 0),
+      vencimento: dados.vencimento ?? new Date().toISOString().slice(0, 10),
+      pago_em: dados.pago_em ?? null,
+      status: dados.status ?? 'pendente',
+      observacoes: dados.observacoes ?? null,
+      criado_em: new Date().toISOString(),
+    } as VendaParcela);
+
+    return { ok: true };
+  });
+}
+
+/** Espelha excluirParcela: só a gestão. */
+export function excluirParcelaDemo(usuario: Perfil, id: string): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+      return { ok: false, erro: 'Apenas a gestão exclui uma parcela.' };
+    }
+    base.parcelas = base.parcelas.filter((p) => p.id !== id);
+    return { ok: true };
+  });
+}
+
 /** Espelha aplicarEfeitoNoImovel na base de demonstração. */
 export function efeitoNoImovelDemo(imovelId: string, efeito: 'tirar_do_ar' | 'excluir'): void {
   alterarBase((base) => {

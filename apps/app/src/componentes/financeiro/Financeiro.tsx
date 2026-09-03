@@ -299,7 +299,13 @@ export function Financeiro({
         )}
 
         {aba === 'recebiveis' && (
-          <Parcelas parcelas={parcelas} vendas={vendas} equipe={equipe} aoAtualizar={avisar} />
+          <Parcelas
+            parcelas={parcelas}
+            vendas={vendas}
+            equipe={equipe}
+            usuario={usuario}
+            aoAtualizar={avisar}
+          />
         )}
 
         {aba === 'equipe' && <QuadroEquipe desempenho={desempenho} competencia={competencia} />}
