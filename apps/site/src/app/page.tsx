@@ -10,6 +10,7 @@ import { CartaoImovel } from '@/componentes/CartaoImovel';
 import { Contador } from '@/componentes/Contador';
 import { DestaquesComAbas } from '@/componentes/DestaquesComAbas';
 import { Esteira } from '@/componentes/Esteira';
+import { GradeEmpreendimentos } from '@/componentes/GradeEmpreendimentos';
 import { Newsletter } from '@/componentes/Newsletter';
 import { Revelar } from '@/componentes/Revelar';
 import { SecaoHero } from '@/componentes/SecaoHero';
@@ -145,6 +146,22 @@ export default async function PaginaInicial() {
           </div>
         </Revelar>
       </div>
+
+      {/* ---------- EMPREENDIMENTOS ---------- */}
+      <section className="secao" style={{ paddingBottom: 0 }}>
+        <div className="container">
+          <Revelar>
+            <div className="cabecalho-secao">
+              <div>
+                <span className="rotulo">Lançamentos</span>
+                <TituloRevelado texto="Empreendimentos exclusivos" grifo="exclusivos" />
+              </div>
+            </div>
+          </Revelar>
+
+          <GradeEmpreendimentos />
+        </div>
+      </section>
 
       {/* ---------- CONDOMINIOS ---------- */}
       {vitrineCondominios.length > 0 && (

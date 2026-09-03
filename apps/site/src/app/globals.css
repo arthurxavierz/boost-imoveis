@@ -4740,6 +4740,177 @@ main {
   }
 }
 
+/* ---------- GRADE DE EMPREENDIMENTOS ----------
+   ------------------------------------------------------------
+   Dez lançamentos com site próprio, em cinco colunas por duas linhas.
+   Cinco colunas para dez itens é o que fecha as duas fileiras sem sobra:
+   em quatro colunas sobrariam dois cartões órfãos na terceira linha, e
+   órfão em grade de categoria parece erro de carregamento.
+
+   Escondida abaixo de 1200px, e não empilhada. Foi pedido assim, e o
+   motivo se sustenta: no celular esta grade fica entre o hero e a
+   vitrine, e dez blocos de imagem empurrariam o primeiro imóvel para
+   depois do terceiro rolar. A marcação continua no HTML, então os dez
+   links seguem valendo para o Google. */
+.grade-empreendimentos {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .grade-empreendimentos {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
+.empreendimento {
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 2;
+  border-radius: var(--raio);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--preto-800);
+  border: 1px solid var(--linha);
+  transition:
+    transform var(--t),
+    border-color var(--t-rapida),
+    box-shadow var(--t),
+    opacity var(--t-rapida);
+
+  /* Entrada escalonada por índice, sem JavaScript. A da direita começa
+     meio segundo depois da primeira, que é o suficiente para o olho ler
+     como uma sequência e não como dez coisas piscando juntas. */
+  opacity: 0;
+  animation: surgir-empreendimento 0.7s var(--curva) forwards;
+  animation-delay: calc(var(--ordem, 0) * 55ms);
+}
+
+@keyframes surgir-empreendimento {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.empreendimento img {
+  transition: transform 1.1s var(--curva-suave);
+}
+
+/* Apaga os vizinhos do que está sob o ponteiro. É o detalhe que faz a
+   grade parecer viva: o cartão não cresce sozinho, o resto recua. */
+@media (hover: hover) and (pointer: fine) {
+  .grade-empreendimentos:hover .empreendimento {
+    opacity: 0.5;
+  }
+
+  .grade-empreendimentos:hover .empreendimento:hover {
+    opacity: 1;
+  }
+}
+
+.empreendimento:hover {
+  transform: translateY(-6px);
+  border-color: var(--ouro-borda);
+  box-shadow: var(--sombra-3);
+}
+
+.empreendimento:hover img {
+  transform: scale(1.08);
+}
+
+/* Véu escuro constante, que abre um pouco no hover. Sem ele o nome
+   branco some nas artes claras, e todas as dez são renders de céu
+   aberto. */
+.empreendimento-veu {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.78) 100%);
+  transition: opacity var(--t);
+}
+
+.empreendimento:hover .empreendimento-veu {
+  opacity: 0.72;
+}
+
+.empreendimento-nome {
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  right: 16px;
+  bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--branco);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.5);
+  transition: transform var(--t);
+}
+
+/* A seta fica recolhida atrás do nome e escorrega para fora no hover. */
+.empreendimento-nome svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--ouro);
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity var(--t-rapida), transform var(--t);
+}
+
+.empreendimento:hover .empreendimento-nome {
+  transform: translateY(-3px);
+}
+
+.empreendimento:hover .empreendimento-nome svg {
+  opacity: 1;
+  transform: none;
+}
+
+/* Fio de ouro que se desenha da esquerda para a direita no hover. */
+.empreendimento::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  left: 16px;
+  bottom: 8px;
+  width: 34px;
+  height: 2px;
+  background: var(--ouro);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--t);
+}
+
+.empreendimento:hover::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empreendimento {
+    opacity: 1;
+    animation: none;
+  }
+
+  .empreendimento:hover {
+    transform: none;
+  }
+
+  .empreendimento:hover img {
+    transform: none;
+  }
+}
+
 /* ---------- ATALHOS DO HERO ---------- */
 
 /* Entram um a um, depois do título e da busca. O índice vem do CSS, não
