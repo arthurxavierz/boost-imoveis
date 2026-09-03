@@ -199,6 +199,51 @@ function limitar(valor: number): number {
  * certo, para a tela poder mostrar tudo de uma vez em vez de revelar um
  * erro por tentativa.
  */
+/**
+ * O imovel como ele aparece no seletor da gaveta de negocio.
+ *
+ * E uma lista de escolha, nao uma ficha: bastam codigo, titulo e onde
+ * fica para a pessoa reconhecer qual imovel esta vendendo. Mandar o
+ * registro inteiro de cada um seria repetir na tela do financeiro o
+ * peso que ja custou caro na tela da carteira.
+ */
+export interface ImovelDaVenda {
+  id: string;
+  codigo: string;
+  titulo: string;
+  bairro: string | null;
+  cidade: string;
+  valor: number;
+  valor_locacao: number | null;
+  status: string;
+  publicado: boolean;
+}
+
+/**
+ * O que a operacao faz com o imovel ligado a ela.
+ *
+ * Existe porque nem toda linha do financeiro significa a mesma coisa
+ * para a carteira: uma proposta nao deveria mexer no anuncio, um
+ * distrato devolve o imovel para a vitrine, e um negocio fechado fora do
+ * sistema as vezes so precisa que aquele imovel suma da lista.
+ */
+export const EFEITOS_NO_IMOVEL = {
+  manter: {
+    rotulo: 'Manter como está',
+    ajuda: 'A operação não mexe no anúncio.',
+  },
+  tirar_do_ar: {
+    rotulo: 'Tirar do ar',
+    ajuda: 'Sai da vitrine agora, sem esperar a conclusão. Continua na carteira.',
+  },
+  excluir: {
+    rotulo: 'Excluir da carteira',
+    ajuda: 'Apaga o imóvel em definitivo. O histórico do negócio guarda o título.',
+  },
+} as const;
+
+export type EfeitoNoImovel = keyof typeof EFEITOS_NO_IMOVEL;
+
 export function validarVenda(v: Partial<Venda>): string[] {
   const erros: string[] = [];
 

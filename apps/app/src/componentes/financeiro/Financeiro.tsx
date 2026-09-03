@@ -10,6 +10,7 @@ import {
   rotuloMes,
   STATUS_VENDA,
   type DesempenhoConsultor,
+  type ImovelDaVenda,
   type Perfil,
   type ResumoFinanceiroPeriodo,
   type VendaDetalhada,
@@ -43,6 +44,10 @@ export function Financeiro({
   equipe,
   competencia,
   statusFiltro,
+  imoveis,
+  de,
+  ate,
+  periodoLivre,
 }: {
   usuario: Perfil;
   resumo: ResumoFinanceiroPeriodo;
@@ -52,6 +57,11 @@ export function Financeiro({
   equipe: Perfil[];
   competencia: string;
   statusFiltro: string;
+  imoveis: ImovelDaVenda[];
+  de: string;
+  ate: string;
+  /** Verdadeiro quando a pessoa digitou datas em vez de usar o mês. */
+  periodoLivre: boolean;
 }) {
   const router = useRouter();
 
@@ -212,6 +222,38 @@ export function Financeiro({
                   ))}
                 </select>
               </div>
+              {/* Datas soltas mandam mais que o mês do cabeçalho. É o
+                  que permite olhar um trimestre ou o ano inteiro sem
+                  andar de mês em mês. */}
+              <div className="campo campo-periodo">
+                <label htmlFor="periodo-de">De</label>
+                <input
+                  id="periodo-de"
+                  type="date"
+                  value={de}
+                  onChange={(e) => navegar({ de: e.target.value || null })}
+                />
+              </div>
+
+              <div className="campo campo-periodo">
+                <label htmlFor="periodo-ate">Até</label>
+                <input
+                  id="periodo-ate"
+                  type="date"
+                  value={ate}
+                  onChange={(e) => navegar({ ate: e.target.value || null })}
+                />
+              </div>
+
+              {periodoLivre && (
+                <button
+                  className="btn btn-fantasma btn-pequeno"
+                  onClick={() => navegar({ de: null, ate: null })}
+                >
+                  Voltar ao mês
+                </button>
+              )}
+
               <span className="texto-mudo">
                 {vendas.length} {vendas.length === 1 ? 'negócio' : 'negócios'}
               </span>
@@ -277,6 +319,7 @@ export function Financeiro({
       {gavetaAberta && (
         <GavetaVenda
           venda={emEdicao}
+          imoveis={imoveis}
           equipe={equipe}
           usuario={usuario}
           aoFechar={() => {

@@ -14,6 +14,7 @@ import type {
   Compromisso,
   CompromissoDetalhado,
   Imovel,
+  ImovelDaVenda,
   Interacao,
   Lead,
   Perfil,
@@ -163,17 +164,62 @@ export function statusCompromissoDemo(
 // FINANCEIRO
 // ------------------------------------------------------------
 
-export function vendasDemo(status?: string): VendaDetalhada[] {
+export function vendasDemo(status?: string, de?: string, ate?: string): VendaDetalhada[] {
   const base = lerBase();
   const porPessoa = nomes();
 
   return base.vendas
     .filter((v) => !status || v.status === status)
+    .filter((v) => (!de || v.data_proposta >= de) && (!ate || v.data_proposta <= ate))
     .sort((a, b) => b.data_proposta.localeCompare(a.data_proposta))
     .map((v) => ({
       ...v,
       consultor_nome: v.consultor_id ? (porPessoa.get(v.consultor_id) ?? null) : null,
       captador_nome: v.captador_id ? (porPessoa.get(v.captador_id) ?? null) : null,
+    }));
+}
+
+/** Espelha aplicarEfeitoNoImovel na base de demonstração. */
+export function efeitoNoImovelDemo(imovelId: string, efeito: 'tirar_do_ar' | 'excluir'): void {
+  alterarBase((base) => {
+    if (efeito === 'excluir') {
+      base.imoveis = base.imoveis.filter((i) => i.id !== imovelId);
+      return;
+    }
+
+    const imovel = base.imoveis.find((i) => i.id === imovelId);
+    if (imovel) Object.assign(imovel, { publicado: false, destaque: false });
+  });
+}
+
+/** Espelha excluirVenda: some com o lançamento e com as parcelas dele. */
+export function excluirVendaDemo(usuario: Perfil, id: string): { ok: boolean; erro?: string } {
+  return alterarBase((base) => {
+    if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+      return { ok: false, erro: 'Apenas a gestão exclui um negócio em definitivo.' };
+    }
+
+    base.vendas = base.vendas.filter((v) => v.id !== id);
+    base.parcelas = base.parcelas.filter((p) => p.venda_id !== id);
+    return { ok: true };
+  });
+}
+
+/** Espelha carregarCarteira: o que ainda pode ser negociado. */
+export function carteiraParaVendaDemo(): ImovelDaVenda[] {
+  return lerBase()
+    .imoveis.filter((i) => i.status === 'disponivel' || i.status === 'reservado')
+    .sort((a, b) => a.codigo.localeCompare(b.codigo))
+    .map((i) => ({
+      id: i.id,
+      codigo: i.codigo,
+      titulo: i.titulo,
+      bairro: i.bairro,
+      cidade: i.cidade,
+      valor: Number(i.valor),
+      valor_locacao: i.valor_locacao === null ? null : Number(i.valor_locacao),
+      status: i.status,
+      publicado: i.publicado,
     }));
 }
 

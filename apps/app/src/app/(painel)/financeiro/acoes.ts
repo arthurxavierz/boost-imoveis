@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache';
 
 import { sugerirParcelas, validarVenda, type Venda } from '@boost/core';
 
-import { baixarParcelaDemo, salvarVendaDemo, statusVendaDemo } from '@/lib/dados-demo';
+import {
+  baixarParcelaDemo,
+  efeitoNoImovelDemo,
+  excluirVendaDemo,
+  salvarVendaDemo,
+  statusVendaDemo,
+} from '@/lib/dados-demo';
 import { modoDemo } from '@/lib/demonstracao';
 import { exigirUsuario } from '@/lib/sessao';
 import { supabaseServidor } from '@/lib/supabase-servidor';
@@ -111,6 +117,8 @@ export async function salvarVenda(_anterior: EstadoAcao, dados: FormData): Promi
   }
 
   const venda = resposta.data as Venda;
+
+  await aplicarEfeitoNoImovel(supabase, registro.imovel_id, texto(dados, 'efeito_imovel'), usuario);
 
   /**
    * Cria as parcelas da comissao no primeiro salvamento, quando ainda
@@ -241,8 +249,27 @@ export async function baixarParcela(id: string, pago: boolean): Promise<EstadoAc
   return { ok: true, mensagem: pago ? 'Parcela baixada.' : 'Baixa desfeita.' };
 }
 
+/**
+ * Apaga o negócio em definitivo.
+ *
+ * Só a gestão, mesma régua da exclusão de imóvel. E o imóvel ligado a
+ * ele não vai junto: quem apaga um lançamento errado do financeiro não
+ * está dizendo que o imóvel deixou de existir.
+ */
 export async function excluirVenda(id: string): Promise<EstadoAcao> {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
+
+  if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+    return { ok: false, erro: 'Apenas a gestão exclui um negócio em definitivo.' };
+  }
+
+  if (modoDemo()) {
+    const r = excluirVendaDemo(usuario, id);
+    revalidatePath('/financeiro');
+    revalidatePath('/');
+    return r.ok ? { ok: true, mensagem: 'Negócio excluído.' } : { ok: false, erro: r.erro };
+  }
+
   const supabase = await supabaseServidor();
 
   const { error } = await supabase.from('vendas').delete().eq('id', id);
@@ -254,6 +281,60 @@ export async function excluirVenda(id: string): Promise<EstadoAcao> {
 
   revalidatePath('/financeiro');
   return { ok: true, mensagem: 'Negócio excluído.' };
+}
+
+/**
+ * O que a operação faz com o imóvel ligado a ela.
+ *
+ * Nem toda linha do financeiro significa a mesma coisa para a carteira.
+ * Registrar uma proposta não deveria mexer no anúncio; um negócio
+ * fechado por fora às vezes só precisa que aquele imóvel suma da lista.
+ * Por isso a escolha é de quem registra, e não uma regra fixa.
+ *
+ * Isto convive com o gatilho ao_concluir_venda do banco, que marca o
+ * imóvel como vendido e tira do ar quando o negócio passa a concluído.
+ * São camadas diferentes: o gatilho garante a coerência do fecho, esta
+ * função atende o que a pessoa pediu no momento do registro. "Manter"
+ * não desfaz o gatilho, e a tela avisa isso.
+ */
+async function aplicarEfeitoNoImovel(
+  supabase: Awaited<ReturnType<typeof supabaseServidor>>,
+  imovelId: string | null,
+  efeito: string,
+  usuario: { papel: string },
+): Promise<void> {
+  if (!imovelId) return;
+  if (efeito !== 'tirar_do_ar' && efeito !== 'excluir') return;
+
+  if (modoDemo()) {
+    efeitoNoImovelDemo(imovelId, efeito);
+    revalidatePath('/imoveis');
+    return;
+  }
+
+  if (efeito === 'tirar_do_ar') {
+    const { error } = await supabase
+      .from('imoveis')
+      .update({ publicado: false, destaque: false })
+      .eq('id', imovelId);
+
+    if (error) console.error('[financeiro] falha ao tirar o imóvel do ar:', error);
+    revalidatePath('/imoveis');
+    return;
+  }
+
+  // Excluir carteira é decisão de gestão, mesma régua da tela de
+  // imóveis. Um consultor que forçasse o campo no formulário apagaria
+  // um registro que ele nem pode editar.
+  if (usuario.papel !== 'admin' && usuario.papel !== 'gestor') {
+    console.warn('[financeiro] exclusão de imóvel pedida por quem não é gestão. Ignorada.');
+    return;
+  }
+
+  const { error } = await supabase.from('imoveis').delete().eq('id', imovelId);
+
+  if (error) console.error('[financeiro] falha ao excluir o imóvel:', error);
+  revalidatePath('/imoveis');
 }
 
 function traduzirErro(mensagem: string): string {

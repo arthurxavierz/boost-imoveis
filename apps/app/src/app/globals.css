@@ -3506,6 +3506,29 @@ button {
   min-width: 170px;
 }
 
+/* Data de/até na barra do financeiro. O rótulo fica ao lado, e não em
+   cima: são dois campos curtos numa barra que já tem situação e
+   contagem, e empilhar rótulo sobre campo dobraria a altura dela. */
+.campo-periodo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.campo-periodo label {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--cinza);
+  white-space: nowrap;
+}
+
+.campo-periodo input {
+  min-height: 40px;
+  padding-block: 6px;
+  font-size: 0.84rem;
+}
+
 /* ---------- SELO DE ORIGEM ---------- */
 
 .selo-origem {

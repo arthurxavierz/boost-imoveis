@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import type {
   DesempenhoConsultor,
+  ImovelDaVenda,
   Perfil,
   ResumoFinanceiroPeriodo,
   VendaDetalhada,
@@ -11,7 +12,7 @@ import type {
 import { Financeiro } from '@/componentes/financeiro/Financeiro';
 import { desempenhoEquipe, resumoFinanceiro } from '@boost/demo';
 
-import { parcelasDemo, vendasDemo } from '@/lib/dados-demo';
+import { carteiraParaVendaDemo, parcelasDemo, vendasDemo } from '@/lib/dados-demo';
 import { equipeDemo, modoDemo } from '@/lib/demonstracao';
 import { exigirPermissao } from '@/lib/sessao';
 import { supabaseServidor } from '@/lib/supabase-servidor';
@@ -22,7 +23,12 @@ export const dynamic = 'force-dynamic';
 export default async function PaginaFinanceiro({
   searchParams,
 }: {
-  searchParams: Promise<{ competencia?: string; status?: string }>;
+  searchParams: Promise<{
+    competencia?: string;
+    status?: string;
+    de?: string;
+    ate?: string;
+  }>;
 }) {
   const params = await searchParams;
 
@@ -34,21 +40,40 @@ export default async function PaginaFinanceiro({
   const competencia = lerCompetencia(params.competencia);
   const { inicio, fim } = limitesDoMes(competencia);
 
+  /**
+   * Período da lista de negócios.
+   *
+   * O mês escolhido é o padrão, e não um enfeite do cabeçalho: a lista
+   * mostrava os últimos 120 negócios de qualquer data enquanto o título
+   * acima dela anunciava um mês específico. Quem lia os dois via uma
+   * contradição e não tinha como saber qual valia.
+   *
+   * As datas soltas, quando informadas, mandam mais que o mês. É o que
+   * permite olhar um trimestre ou o ano inteiro sem obrigar a andar de
+   * mês em mês.
+   */
+  const de = lerData(params.de) ?? inicio;
+  const ate = lerData(params.ate) ?? fim;
+
   const [resumo, vendas, parcelas, desempenho, equipe] = modoDemo()
     ? [
         resumoFinanceiro(inicio, fim),
-        vendasDemo(params.status),
+        vendasDemo(params.status, de, ate),
         parcelasDemo(),
         desempenhoEquipe(inicio, fim),
         equipeDemo(),
       ]
     : await Promise.all([
         carregarResumo(supabase, inicio, fim),
-        carregarVendas(supabase, params.status),
+        carregarVendas(supabase, params.status, de, ate),
         carregarParcelas(supabase),
         carregarDesempenho(supabase, inicio, fim),
         carregarEquipe(supabase),
       ]);
+
+  // A carteira alimenta o seletor de imóvel da gaveta. Só as colunas que
+  // o seletor mostra: é uma lista de escolha, não uma ficha.
+  const imoveis = modoDemo() ? carteiraParaVendaDemo() : await carregarCarteira(supabase);
 
   return (
     <Financeiro
@@ -60,8 +85,49 @@ export default async function PaginaFinanceiro({
       equipe={equipe}
       competencia={competencia}
       statusFiltro={params.status ?? ''}
+      imoveis={imoveis}
+      de={de}
+      ate={ate}
+      periodoLivre={Boolean(params.de || params.ate)}
     />
   );
+}
+
+/** Aceita só AAAA-MM-DD. Texto de URL é escrito por desconhecido. */
+function lerData(valor?: string): string | null {
+  return valor && /^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : null;
+}
+
+/**
+ * A carteira que o seletor de imóvel da gaveta oferece.
+ *
+ * Traz o que ainda pode ser negociado, e não os 964: imóvel vendido ou
+ * inativo numa lista de escolha só atrapalha quem procura. Em faixas de
+ * mil porque é o teto que o PostgREST aplica sem avisar.
+ */
+async function carregarCarteira(supabase: ClienteSupabase): Promise<ImovelDaVenda[]> {
+  const linhas: ImovelDaVenda[] = [];
+  const PAGINA = 1000;
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from('imoveis')
+      .select('id, codigo, titulo, bairro, cidade, valor, valor_locacao, status, publicado')
+      .in('status', ['disponivel', 'reservado'])
+      .order('codigo', { ascending: true })
+      .range(linhas.length, linhas.length + PAGINA - 1);
+
+    if (error) {
+      console.error('[financeiro] falha ao carregar a carteira:', error);
+      break;
+    }
+
+    const faixa = (data ?? []) as unknown as ImovelDaVenda[];
+    linhas.push(...faixa);
+    if (faixa.length < PAGINA) break;
+  }
+
+  return linhas;
 }
 
 function lerCompetencia(valor?: string): string {
@@ -121,7 +187,9 @@ async function carregarResumo(
 
 async function carregarVendas(
   supabase: ClienteSupabase,
-  status?: string,
+  status: string | undefined,
+  de: string,
+  ate: string,
 ): Promise<VendaDetalhada[]> {
   let consulta = supabase
     .from('vendas')
@@ -130,8 +198,10 @@ async function carregarVendas(
        consultor:perfis!vendas_consultor_id_fkey (nome),
        captador:perfis!vendas_captador_id_fkey (nome)`,
     )
+    .gte('data_proposta', de)
+    .lte('data_proposta', ate)
     .order('data_proposta', { ascending: false })
-    .limit(120);
+    .limit(500);
 
   const permitidos = ['proposta', 'aprovada', 'contrato', 'concluida', 'cancelada'];
   if (status && permitidos.includes(status)) consulta = consulta.eq('status', status);

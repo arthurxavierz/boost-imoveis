@@ -1,17 +1,19 @@
 'use client';
 
-import { useActionState, useEffect, useMemo, useState } from 'react';
+import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
 
 import {
   brl,
   calcularVenda,
+  EFEITOS_NO_IMOVEL,
   FORMAS_PAGAMENTO,
+  type ImovelDaVenda,
   type Perfil,
   type VendaDetalhada,
 } from '@boost/core';
 
-import { salvarVenda, type EstadoAcao } from '@/app/(painel)/financeiro/acoes';
-import { IconeAlerta, IconeFechar, IconeInfo } from '@/componentes/Icones';
+import { excluirVenda, salvarVenda, type EstadoAcao } from '@/app/(painel)/financeiro/acoes';
+import { IconeAlerta, IconeFechar, IconeInfo, IconeLixeira } from '@/componentes/Icones';
 
 const ESTADO_INICIAL: EstadoAcao = { ok: false };
 
@@ -29,19 +31,36 @@ const ESTADO_INICIAL: EstadoAcao = { ok: false };
  */
 export function GavetaVenda({
   venda,
+  imoveis,
   equipe,
   usuario,
   aoFechar,
   aoConcluir,
 }: {
   venda: VendaDetalhada | null;
+  imoveis: ImovelDaVenda[];
   equipe: Perfil[];
   usuario: Perfil;
   aoFechar: () => void;
   aoConcluir: (mensagem: string) => void;
 }) {
   const [estado, enviar, enviando] = useActionState(salvarVenda, ESTADO_INICIAL);
+  const [pendente, iniciar] = useTransition();
   const editando = Boolean(venda);
+  const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
+
+  /**
+   * O imóvel escolhido da carteira.
+   *
+   * Fica em estado, e não solto no formulário, porque duas coisas
+   * dependem dele: o título gravado no negócio, que é preenchido
+   * sozinho ao escolher, e o bloco de efeito, que não faz sentido
+   * aparecer quando não há imóvel para afetar.
+   */
+  const [imovelId, setImovelId] = useState(venda?.imovel_id ?? '');
+  const [tituloImovel, setTituloImovel] = useState(venda?.imovel_titulo ?? '');
+
+  const imovelEscolhido = imoveis.find((i) => i.id === imovelId) ?? null;
 
   const [valorTabela, setValorTabela] = useState(formatar(venda?.valor_tabela));
   const [valorVenda, setValorVenda] = useState(formatar(venda?.valor_venda));
@@ -103,7 +122,7 @@ export function GavetaVenda({
 
         <form action={enviar} style={{ display: 'contents' }}>
           <input type="hidden" name="id" value={venda?.id ?? ''} />
-          <input type="hidden" name="imovel_id" value={venda?.imovel_id ?? ''} />
+          <input type="hidden" name="imovel_id" value={imovelId} />
           <input type="hidden" name="lead_id" value={venda?.lead_id ?? ''} />
 
           <div className="gaveta-corpo">
@@ -131,23 +150,80 @@ export function GavetaVenda({
                 </div>
               </div>
 
+              {/* O imóvel da carteira, e não um texto solto.
+                  ------------------------------------------------------
+                  Este campo era só um texto digitado, e por isso
+                  imovel_id ficava vazio em quase todo negócio. O efeito
+                  disso não aparecia aqui: aparecia na carteira, onde o
+                  gatilho do banco que tira o imóvel do ar ao concluir
+                  nunca tinha um id para agir. Escolhendo da lista, o
+                  negócio passa a abater no estoque de verdade. */}
+              <div className="campo">
+                <label htmlFor="imovel_escolhido">Imóvel da carteira</label>
+                <select
+                  id="imovel_escolhido"
+                  value={imovelId}
+                  onChange={(e) => {
+                    setImovelId(e.target.value);
+                    const escolhido = imoveis.find((i) => i.id === e.target.value);
+                    if (escolhido) setTituloImovel(escolhido.titulo);
+                  }}
+                >
+                  <option value="">Sem vínculo com a carteira</option>
+                  {imoveis.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.codigo} · {i.titulo.slice(0, 70)}
+                      {i.bairro ? ` · ${i.bairro}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="ajuda">
+                  Opcional. Vinculado, o negócio abate no estoque e a conclusão tira o imóvel da
+                  vitrine sozinha. Sem vínculo, entra como negócio de fora da carteira.
+                </span>
+              </div>
+
               <div className="campo">
                 <label htmlFor="imovel_titulo">
-                  Imóvel<span className="obrigatorio">*</span>
+                  Como aparece no negócio<span className="obrigatorio">*</span>
                 </label>
                 <input
                   id="imovel_titulo"
                   name="imovel_titulo"
-                  defaultValue={venda?.imovel_titulo ?? ''}
+                  value={tituloImovel}
+                  onChange={(e) => setTituloImovel(e.target.value)}
                   placeholder="Cobertura Duplex Morada da Colina"
                   required
                   autoFocus={!editando}
                 />
                 <span className="ajuda">
-                  O título fica gravado no negócio. Se o imóvel for renomeado depois, o histórico
-                  financeiro continua legível.
+                  Preenchido sozinho ao escolher da carteira, e editável. O título fica gravado no
+                  negócio: se o imóvel for renomeado ou excluído depois, o histórico financeiro
+                  continua legível.
                 </span>
               </div>
+
+              {/* Só faz sentido com imóvel vinculado: sem id não há o que
+                  afetar, e um seletor inerte só confunde. */}
+              {imovelId && (
+                <div className="campo">
+                  <label htmlFor="efeito_imovel">O que fazer com o imóvel</label>
+                  <select id="efeito_imovel" name="efeito_imovel" defaultValue="manter">
+                    {Object.entries(EFEITOS_NO_IMOVEL)
+                      .filter(([chave]) => chave !== 'excluir' || gestor)
+                      .map(([chave, info]) => (
+                        <option key={chave} value={chave}>
+                          {info.rotulo}
+                        </option>
+                      ))}
+                  </select>
+                  <span className="ajuda">
+                    {imovelEscolhido && !imovelEscolhido.publicado && 'Este imóvel já está fora do ar. '}
+                    Aplicado ao salvar. Vale lembrar: concluir o negócio já marca o imóvel como
+                    vendido ou locado e tira da vitrine, mesmo com “manter”.
+                  </span>
+                </div>
+              )}
 
               <div className="linha-campos">
                 <div className="campo">
@@ -505,7 +581,34 @@ export function GavetaVenda({
           </div>
 
           <footer className="gaveta-rodape">
-            <button type="button" className="btn btn-claro" onClick={aoFechar}>
+            {/* Excluir some com o lançamento, não com o imóvel: quem
+                apaga um registro errado do financeiro não está dizendo
+                que o imóvel deixou de existir. */}
+            {editando && gestor && (
+              <button
+                type="button"
+                className="btn btn-perigo"
+                disabled={pendente || enviando}
+                onClick={() => {
+                  const certeza = window.confirm(
+                    `Excluir o negócio ${venda?.codigo ?? ''} em definitivo?\n\n` +
+                      'As parcelas de comissão vão junto e não há como desfazer.\n\n' +
+                      'O imóvel vinculado continua na carteira.',
+                  );
+                  if (!certeza) return;
+
+                  iniciar(async () => {
+                    const r = await excluirVenda(venda!.id);
+                    aoConcluir(r.ok ? (r.mensagem ?? 'Excluído.') : (r.erro ?? 'Falha.'));
+                  });
+                }}
+              >
+                <IconeLixeira />
+                Excluir
+              </button>
+            )}
+
+            <button type="button" className="btn btn-claro empurra" onClick={aoFechar}>
               Cancelar
             </button>
             <button className="btn" type="submit" disabled={enviando || somaExcede}>
