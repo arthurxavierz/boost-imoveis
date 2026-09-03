@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 
 import type { Perfil } from '@boost/core';
@@ -13,8 +14,20 @@ import { supabaseServidor } from './supabase-servidor';
  * do Supabase. Num sistema onde a pessoa logada ve dado de cliente e
  * comissao, confiar num cookie que o proprio navegador pode ter forjado
  * nao e aceitavel.
+ *
+ * Embrulhada em cache() do React, que memoriza por requisicao. Sem isso
+ * a conta era esta: o layout do painel chama exigirUsuario, e cada
+ * pagina chama exigirPermissao, que chama exigirUsuario de novo. Duas
+ * chamadas, cada uma custando um getUser mais um select em perfis, dao
+ * quatro idas ao Supabase antes de a tela buscar o primeiro dado
+ * proprio. Medido daqui, sao cerca de 600ms jogados fora em toda
+ * navegacao do painel.
+ *
+ * O cache vale so para a requisicao em curso: nao ha risco de uma
+ * pessoa herdar a sessao de outra, que seria a pior falha possivel num
+ * sistema com carteira separada por consultor.
  */
-export async function usuarioAtual(): Promise<Perfil | null> {
+export const usuarioAtual = cache(async function usuarioAtual(): Promise<Perfil | null> {
   // Sem banco configurado, o painel roda em demonstração e entra com um
   // perfil simulado. Some sozinho quando o Supabase for configurado.
   if (modoDemo()) return usuarioDemo();
@@ -36,7 +49,7 @@ export async function usuarioAtual(): Promise<Perfil | null> {
   if (error || !data) return null;
 
   return data as Perfil;
-}
+});
 
 /**
  * Exige alguem logado e ativo. Use no layout do painel: qualquer pagina

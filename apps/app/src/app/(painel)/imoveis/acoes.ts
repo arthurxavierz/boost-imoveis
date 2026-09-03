@@ -2,9 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 
+import type { Imovel } from '@boost/core';
+
 import {
   alterarImovelDemo,
   excluirImovelDemo,
+  fichaImovelDemo,
   imoveisDemo,
   salvarImovelDemo,
 } from '@/lib/dados-demo';
@@ -240,6 +243,36 @@ export async function atribuirCorretor(id: string, corretorId: string): Promise<
  * exatamente quais passaram — é assim que a tela sabe dizer quantos
  * ficaram de fora por serem de outro consultor.
  */
+/**
+ * A ficha completa de um imóvel, para a gaveta.
+ *
+ * A lista da carteira carrega só as vinte colunas que a tabela desenha.
+ * Quando alguém abre a gaveta para editar, aí sim vale buscar as 58: é
+ * um registro, num clique deliberado, contra 964 registros em toda
+ * abertura da tela.
+ *
+ * O RLS decide o que volta. Um corretor que force o id de um imóvel de
+ * outro recebe null, e a gaveta mostra o aviso em vez do formulário.
+ */
+export async function buscarFichaImovel(id: string): Promise<Imovel | null> {
+  await exigirUsuario();
+
+  if (!id) return null;
+
+  if (modoDemo()) return fichaImovelDemo(id);
+
+  const supabase = await supabaseServidor();
+
+  const { data, error } = await supabase.from('imoveis').select('*').eq('id', id).maybeSingle();
+
+  if (error) {
+    console.error('[imoveis] falha ao abrir a ficha:', error);
+    return null;
+  }
+
+  return (data ?? null) as Imovel | null;
+}
+
 export async function publicarEmLote(ids: string[], publicado: boolean): Promise<EstadoLote> {
   const usuario = await exigirUsuario();
 

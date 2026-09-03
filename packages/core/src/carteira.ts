@@ -34,7 +34,7 @@ function simplificar(texto: string): string {
  * percorrer a lista de proprietarios uma vez por imovel.
  */
 export function imovelNoFiltro(
-  imovel: Imovel,
+  imovel: ImovelResumo,
   filtro: FiltroCarteira,
   nomeProprietario: string | null,
 ): boolean {
@@ -93,11 +93,48 @@ export function imovelNoFiltro(
   );
 }
 
-export function filtrarCarteira(
-  imoveis: Imovel[],
+/**
+ * As colunas do imovel que a tela da carteira precisa.
+ *
+ * O registro inteiro tem 58 colunas, e a lista le vinte. A diferenca
+ * pesa: com 964 imoveis, mandar tudo sao 2,2 MB no HTML da pagina, e o
+ * que sobra e descricao, observacao interna e metadados de SEO que a
+ * tabela nunca desenha.
+ *
+ * O tipo existe para o corte ser honesto. Poderia ser um select mais
+ * curto com um cast para Imovel, e a tela funcionaria igual hoje, mas o
+ * dia em que alguem lesse imovel.descricao ali dentro o TypeScript
+ * ficaria calado e o valor chegaria como undefined em producao.
+ */
+export type ImovelResumo = Pick<
+  Imovel,
+  | 'id'
+  | 'titulo'
+  | 'codigo'
+  | 'tipo'
+  | 'finalidade'
+  | 'status'
+  | 'bairro'
+  | 'cidade'
+  | 'condominio_nome'
+  | 'matricula'
+  | 'valor'
+  | 'valor_locacao'
+  | 'area_util'
+  | 'quartos'
+  | 'vagas'
+  | 'publicado'
+  | 'destaque'
+  | 'corretor_id'
+  | 'proprietario_id'
+  | 'atualizado_em'
+>;
+
+export function filtrarCarteira<T extends ImovelResumo>(
+  imoveis: T[],
   filtro: FiltroCarteira,
   proprietarios: Pick<Proprietario, 'id' | 'nome'>[],
-): Imovel[] {
+): T[] {
   const nomes = new Map(proprietarios.map((p) => [p.id, p.nome]));
 
   return imoveis.filter((i) =>
@@ -136,7 +173,7 @@ export const FAIXAS_CARTEIRA: { rotulo: string; min: number | null; max: number 
 ];
 
 /** Resume a carteira de um proprietario a partir dos imoveis dele. */
-export function resumirCarteira(imoveis: Imovel[]): {
+export function resumirCarteira(imoveis: Pick<Imovel, 'publicado' | 'status' | 'valor'>[]): {
   total_imoveis: number;
   imoveis_publicados: number;
   valor_carteira: number;

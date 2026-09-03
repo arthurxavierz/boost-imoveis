@@ -55,13 +55,26 @@ export default async function PaginaProprietarios({
    * JavaScript uma regra que o Postgres já aplica — e que, se as duas
    * discordarem um dia, quem estará certo é o banco.
    */
+  /**
+   * Da carteira, só as colunas que esta tela lê.
+   *
+   * Aqui havia um select('*') de até mil imóveis. Com 964 na base isso
+   * são 2,2 MB medidos, que o servidor busca, serializa no HTML e o
+   * navegador ainda precisa interpretar, tudo para desenhar três
+   * números por proprietário e uma lista curta dentro da gaveta.
+   *
+   * As colunas abaixo são exatamente as usadas: resumirCarteira soma
+   * por publicado, status e valor; a gaveta mostra título, código,
+   * tipo, bairro e responsável; e proprietario_id é o que amarra cada
+   * imóvel ao dono. O resto, com descrição e observação interna à
+   * frente, nunca chegava a ser lido.
+   */
+  const COLUNAS_DA_CARTEIRA =
+    'id, titulo, codigo, tipo, bairro, status, publicado, valor, corretor_id, proprietario_id';
+
   const [proprietarios, imoveis, equipe] = await Promise.all([
     supabase.from('proprietarios').select('*').order('nome'),
-    supabase
-      .from('imoveis')
-      .select('*')
-      .order('atualizado_em', { ascending: false })
-      .limit(1000),
+    carregarCarteiraResumida(supabase, COLUNAS_DA_CARTEIRA),
     supabase.from('perfis').select('*').eq('ativo', true).order('nome'),
   ]);
 
@@ -69,7 +82,7 @@ export default async function PaginaProprietarios({
     console.error('[proprietarios] falha ao carregar:', proprietarios.error);
   }
 
-  const lista = (imoveis.data ?? []) as Imovel[];
+  const lista = imoveis as Imovel[];
 
   const comCarteira: ProprietarioComCarteira[] = (proprietarios.data ?? []).map((p) => ({
     ...p,
@@ -85,4 +98,44 @@ export default async function PaginaProprietarios({
       abertoInicial={params.proprietario ?? null}
     />
   );
+}
+
+/**
+ * A carteira inteira, em faixas de mil.
+ *
+ * O limite de mil que havia aqui não era escolha, era o teto do
+ * PostgREST escrito à mão: pedir mais que isso devolve mil e cala. Com
+ * 964 imóveis a conta ainda fecha, mas o imóvel de número mil e um
+ * deixaria proprietários com a carteira contada a menos, sem nenhum
+ * sinal na tela.
+ */
+async function carregarCarteiraResumida(
+  supabase: Awaited<ReturnType<typeof supabaseServidor>>,
+  colunas: string,
+): Promise<unknown[]> {
+  const linhas: unknown[] = [];
+  const PAGINA = 1000;
+
+  for (;;) {
+    const de = linhas.length;
+
+    const { data, error } = await supabase
+      .from('imoveis')
+      .select(colunas)
+      .order('atualizado_em', { ascending: false })
+      .order('codigo', { ascending: true })
+      .range(de, de + PAGINA - 1);
+
+    if (error) {
+      console.error('[proprietarios] falha ao carregar a carteira:', error);
+      break;
+    }
+
+    const faixa = data ?? [];
+    linhas.push(...faixa);
+
+    if (faixa.length < PAGINA) break;
+  }
+
+  return linhas;
 }

@@ -495,6 +495,11 @@ export function alterarImovelDemo(
   });
 }
 
+/** Espelha buscarFichaImovel: um imóvel inteiro, pelo id. */
+export function fichaImovelDemo(id: string): Imovel | null {
+  return lerBase().imoveis.find((i) => i.id === id) ?? null;
+}
+
 export function contarImoveisDemo() {
   const imoveis = lerBase().imoveis;
   return {

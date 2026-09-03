@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 
 import {
   area as fmtArea,
@@ -17,6 +17,7 @@ import {
   TIPOS_IMOVEL,
   type FiltroCarteira,
   type Imovel,
+  type ImovelResumo,
   type Perfil,
   type Proprietario,
 } from '@boost/core';
@@ -34,6 +35,7 @@ import {
   alternarDestaque,
   alternarPublicacao,
   atribuirCorretor,
+  buscarFichaImovel,
   excluirEmLote,
   mudarStatusImovel,
   publicarEmLote,
@@ -84,7 +86,7 @@ export function ListaImoveis({
   truncada = false,
 }: {
   usuario: Perfil;
-  imoveis: Imovel[];
+  imoveis: ImovelResumo[];
   proprietarios: Pick<Proprietario, 'id' | 'nome'>[];
   equipe: Perfil[];
   parametros: { imovel?: string; proprietario?: string; 'sem-proprietario'?: string };
@@ -106,6 +108,15 @@ export function ListaImoveis({
   const [criandoNovo, setCriandoNovo] = useState(false);
   const [recado, setRecado] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set());
+
+  /**
+   * A ficha completa do imóvel aberto.
+   *
+   * A lista carrega só as colunas que a tabela desenha, então o registro
+   * inteiro chega sob demanda, quando a gaveta abre. É um clique
+   * deliberado contra 964 registros em toda abertura da tela.
+   */
+  const [ficha, setFicha] = useState<Imovel | null>(null);
 
   const gestor = usuario.papel === 'admin' || usuario.papel === 'gestor';
 
@@ -131,10 +142,24 @@ export function ListaImoveis({
     [imoveis, filtros, proprietarios],
   );
 
-  const aberto = useMemo(
-    () => (abertoId ? (imoveis.find((i) => i.id === abertoId) ?? null) : null),
-    [imoveis, abertoId],
-  );
+  useEffect(() => {
+    if (!abertoId) {
+      setFicha(null);
+      return;
+    }
+
+    let valido = true;
+
+    buscarFichaImovel(abertoId).then((r) => {
+      // A resposta de uma gaveta já fechada não pode reabrir nada: entre
+      // o clique e a resposta cabe um Esc, e cabe abrir outro imóvel.
+      if (valido) setFicha(r);
+    });
+
+    return () => {
+      valido = false;
+    };
+  }, [abertoId]);
 
   const ativos = contarFiltrosCarteira(filtros);
 
@@ -242,6 +267,7 @@ export function ListaImoveis({
   function fecharGaveta() {
     setAbertoId(null);
     setCriandoNovo(false);
+    setFicha(null);
   }
 
   function aoConcluir(mensagem: string, erro = false) {
@@ -868,10 +894,13 @@ export function ListaImoveis({
         <IconeMais />
       </button>
 
-      {(aberto || criandoNovo) && (
+      {/* A gaveta só monta com a ficha em mãos. Montar antes faria o
+          formulário nascer com os campos vazios e preenchê-los depois,
+          que é como se perde o que a pessoa já começou a digitar. */}
+      {((abertoId && ficha) || criandoNovo) && (
         <GavetaImovel
           usuario={usuario}
-          imovel={aberto}
+          imovel={criandoNovo ? null : ficha}
           proprietarios={proprietarios}
           equipe={equipe}
           aoFechar={fecharGaveta}

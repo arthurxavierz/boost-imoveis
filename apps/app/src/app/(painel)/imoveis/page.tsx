@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import type { Imovel, Perfil, Proprietario } from '@boost/core';
+import type { ImovelResumo, Perfil, Proprietario } from '@boost/core';
 
 import { ListaImoveis } from '@/componentes/imoveis/ListaImoveis';
 import { imoveisDemo, nomesProprietariosDemo } from '@/lib/dados-demo';
@@ -43,6 +43,42 @@ const LIMITE_CARTEIRA = 2000;
 
 /** Teto de linhas por resposta do PostgREST. Não adianta pedir mais. */
 const LINHAS_POR_PAGINA = 1000;
+
+/**
+ * As colunas que a tela desenha, e só elas.
+ *
+ * Com select('*') a página carregava 2,2 MB para 964 imóveis, buscava
+ * tudo do banco, serializava tudo no HTML e ainda fazia o navegador
+ * interpretar tudo, para desenhar uma tabela de vinte colunas. Medido,
+ * o corte leva o mesmo conteúdo a menos de 500 KB.
+ *
+ * A ficha completa não some: ela é buscada quando a gaveta abre, que é
+ * o único momento em que alguém lê descrição e observação interna. De
+ * quebra, esses dois campos deixam de viajar no HTML de uma tela que só
+ * lista.
+ */
+const COLUNAS_DA_LISTA = [
+  'id',
+  'titulo',
+  'codigo',
+  'tipo',
+  'finalidade',
+  'status',
+  'bairro',
+  'cidade',
+  'condominio_nome',
+  'matricula',
+  'valor',
+  'valor_locacao',
+  'area_util',
+  'quartos',
+  'vagas',
+  'publicado',
+  'destaque',
+  'corretor_id',
+  'proprietario_id',
+  'atualizado_em',
+].join(', ');
 
 export default async function PaginaImoveis({
   searchParams,
@@ -91,7 +127,7 @@ export default async function PaginaImoveis({
   return (
     <ListaImoveis
       usuario={usuario}
-      imoveis={carteira.map(semColunaDeBusca)}
+      imoveis={carteira}
       proprietarios={(proprietarios.data ?? []) as Pick<Proprietario, 'id' | 'nome'>[]}
       equipe={(equipe.data ?? []) as Perfil[]}
       parametros={params}
@@ -117,8 +153,8 @@ export default async function PaginaImoveis({
  */
 async function carregarCarteira(
   supabase: Awaited<ReturnType<typeof supabaseServidor>>,
-): Promise<(Imovel & { busca?: unknown })[]> {
-  const carteira: (Imovel & { busca?: unknown })[] = [];
+): Promise<ImovelResumo[]> {
+  const carteira: ImovelResumo[] = [];
 
   while (carteira.length < LIMITE_CARTEIRA) {
     const de = carteira.length;
@@ -126,7 +162,7 @@ async function carregarCarteira(
 
     const { data, error } = await supabase
       .from('imoveis')
-      .select('*')
+      .select(COLUNAS_DA_LISTA)
       .order('atualizado_em', { ascending: false })
       .order('codigo', { ascending: true })
       .range(de, ate);
@@ -136,7 +172,7 @@ async function carregarCarteira(
       break;
     }
 
-    const faixa = (data ?? []) as (Imovel & { busca?: unknown })[];
+    const faixa = (data ?? []) as unknown as ImovelResumo[];
     carteira.push(...faixa);
 
     // Faixa incompleta significa fim da carteira, e não erro.
@@ -146,20 +182,3 @@ async function carregarCarteira(
   return carteira;
 }
 
-/**
- * Tira o tsvector do registro antes de ele descer para o navegador.
- *
- * `busca` é uma coluna gerada que só existe para o índice de texto do
- * Postgres, e ninguém lê no cliente — mas ela sai no select('*') e, com
- * a carteira inteira, era o campo mais pesado da página: 453KB de um
- * payload de 2MB, quase um quarto, para um dado que nada renderiza.
- *
- * Removida aqui, e não trocando o select('*') por uma lista de colunas,
- * de propósito: a gaveta de edição monta o formulário com o registro
- * completo, e uma lista fixa de 57 nomes significaria que toda coluna
- * nova de migration nasceria faltando no formulário, em silêncio.
- */
-function semColunaDeBusca(imovel: Imovel & { busca?: unknown }): Imovel {
-  const { busca: _ignorado, ...resto } = imovel;
-  return resto as Imovel;
-}
