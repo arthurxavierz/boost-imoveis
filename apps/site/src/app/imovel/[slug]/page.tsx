@@ -225,19 +225,33 @@ export default async function PaginaImovel({ params }: { params: Promise<{ slug:
                       estrutura do empreendimento e as outras unidades disponíveis nele.
                     </span>
                   </div>
+                  {/* O botão da página do condomínio só aparece quando
+                      existe condomínio cadastrado para apontar.
+
+                      A carteira veio de importação e trouxe o nome do
+                      empreendimento em texto, sem criar o registro:
+                      condominio_id está vazio nos 964. Enquanto esteve
+                      fixo, "Ver o condomínio" montava um slug a partir do
+                      nome e levava a uma página que não existe. Sem
+                      registro sobra uma ação só, a que funciona, e o
+                      botão volta sozinho quando a gestão cadastrar o
+                      empreendimento. */}
                   <div style={{ display: 'flex', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
-                    <Link
-                      className="btn btn-contorno btn-pequeno"
-                      href={`/condominio/${slugify(`${imovel.condominio_nome}-${imovel.cidade}`)}`}
-                    >
-                      Ver o condomínio
-                      <IconeSeta />
-                    </Link>
+                    {imovel.condominio_id && (
+                      <Link
+                        className="btn btn-contorno btn-pequeno"
+                        href={`/condominio/${slugify(`${imovel.condominio_nome}-${imovel.cidade}`)}`}
+                      >
+                        Ver o condomínio
+                        <IconeSeta />
+                      </Link>
+                    )}
                     <Link
                       className="btn btn-contorno btn-pequeno"
                       href={`/imoveis?condominio=${encodeURIComponent(imovel.condominio_nome)}`}
                     >
-                      Outras unidades
+                      {imovel.condominio_id ? 'Outras unidades' : 'Ver outras unidades'}
+                      {!imovel.condominio_id && <IconeSeta />}
                     </Link>
                   </div>
                 </section>

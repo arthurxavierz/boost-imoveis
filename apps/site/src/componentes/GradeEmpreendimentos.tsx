@@ -1,6 +1,11 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
-import { EMPREENDIMENTOS, arteDoEmpreendimento } from '@/lib/empreendimentos';
+import {
+  DESTINO_EMPREENDIMENTO,
+  EMPREENDIMENTOS,
+  arteDoEmpreendimento,
+} from '@/lib/empreendimentos';
 
 import { IconeSeta } from './Icones';
 
@@ -10,7 +15,11 @@ import { IconeSeta } from './Icones';
  * Só no desktop, por decisão de quem pediu: no celular a grade viria
  * depois do hero e antes de qualquer imóvel, empurrando a vitrine para
  * baixo do terceiro rolar. O CSS esconde tudo abaixo de 1200px, e a
- * marcação continua no HTML para o Google seguir os dez links.
+ * marcação continua no HTML.
+ *
+ * Os dez levam ao contato, e é por isso que o link é interno e abre na
+ * mesma aba: quem clica num lançamento está começando uma conversa, não
+ * saindo do site.
  *
  * Sem componente de cliente e sem JavaScript. A entrada escalonada é
  * uma animação de CSS com atraso por índice, e o realce no hover é
@@ -24,12 +33,11 @@ export function GradeEmpreendimentos() {
   return (
     <div className="grade-empreendimentos">
       {EMPREENDIMENTOS.map((item, i) => (
-        <a
+        <Link
           key={item.arquivo}
           className="empreendimento"
-          href={item.link}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={DESTINO_EMPREENDIMENTO}
+          aria-label={`Falar sobre o ${item.nome}`}
           // O atraso vem do índice: são dez elementos fixos, e uma
           // variável por item evita dez regras nth-child no CSS.
           style={{ '--ordem': i } as React.CSSProperties}
@@ -48,7 +56,7 @@ export function GradeEmpreendimentos() {
             {item.nome}
             <IconeSeta />
           </span>
-        </a>
+        </Link>
       ))}
     </div>
   );

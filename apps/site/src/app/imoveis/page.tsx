@@ -26,12 +26,25 @@ export const metadata: Metadata = {
 
 type Params = Record<string, string | string[] | undefined>;
 
-const POR_PAGINA = 12;
+/**
+ * Quantos imóveis a listagem carrega de uma vez.
+ *
+ * Doze continua sendo o padrão porque é o que fecha três fileiras de
+ * quatro na grade, e porque é o que o Google recebe quando entra sem
+ * parâmetro nenhum. Quarenta existe para quem está garimpando: com 964
+ * imóveis, varrer a carteira de doze em doze são oitenta páginas.
+ *
+ * A lista é fechada de propósito. O número vem da query string, e sem
+ * ela alguém pediria "porPagina=100000" e derrubaria a consulta.
+ */
+const POR_PAGINA_OPCOES = [12, 24, 40] as const;
+const POR_PAGINA = POR_PAGINA_OPCOES[0];
 
 export default async function PaginaImoveis({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
   const filtro = lerFiltro(params);
   const modo = texto(params, 'modo') === 'lista' ? 'lista' : 'grade';
+  const porPagina = filtro.porPagina ?? POR_PAGINA;
 
   const [resultado, facetas] = await Promise.all([carregarBusca(filtro), carregarFacetas()]);
 
@@ -70,6 +83,29 @@ export default async function PaginaImoveis({ searchParams }: { searchParams: Pr
               abrirAoEntrar={texto(params, 'filtros') === '1'}
             />
           </Suspense>
+
+          {/* Trocar a quantidade volta para a primeira página. Sem
+              isso, quem estivesse na página 40 com doze por vez pediria
+              quarenta e cairia numa página que deixou de existir. */}
+          <div
+            className="seletor-modo seletor-quantidade"
+            role="group"
+            aria-label="Imóveis por página"
+          >
+            {POR_PAGINA_OPCOES.map((n) => (
+              <Link
+                key={n}
+                href={montarUrl(params, {
+                  porPagina: n === POR_PAGINA ? null : String(n),
+                  pagina: null,
+                })}
+                aria-current={porPagina === n ? 'true' : undefined}
+                aria-label={`Mostrar ${n} imóveis por página`}
+              >
+                {n}
+              </Link>
+            ))}
+          </div>
 
           <div className="seletor-modo" role="group" aria-label="Formato da lista">
             <Link
@@ -153,6 +189,17 @@ function texto(params: Params, chave: string): string | undefined {
   return s?.trim() || undefined;
 }
 
+/**
+ * Quantos por pagina, aceitando so o que esta na lista.
+ *
+ * Qualquer outra coisa cai no padrao em silencio: um link velho com um
+ * numero fora da lista continua abrindo a listagem, so que com doze.
+ */
+function lerPorPagina(params: Params): number {
+  const pedido = Number(texto(params, 'porPagina'));
+  return POR_PAGINA_OPCOES.find((n) => n === pedido) ?? POR_PAGINA;
+}
+
 /** Monta a URL da propria pagina trocando alguns parametros. */
 function montarUrl(params: Params, mudancas: Record<string, string | null>): string {
   const atuais = new URLSearchParams();
@@ -216,6 +263,6 @@ function lerFiltro(params: Params): FiltroBusca {
     somenteDestaque: texto(params, 'destaque') === '1' || undefined,
     ordem: ordem && CHAVES_ORDEM.includes(ordem) ? ordem : 'relevancia',
     pagina: Math.min(inteiro('pagina') ?? 1, 500),
-    porPagina: POR_PAGINA,
+    porPagina: lerPorPagina(params),
   };
 }

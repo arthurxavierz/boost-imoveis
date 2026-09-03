@@ -1,12 +1,16 @@
 /**
- * Empreendimentos com página própria.
+ * Lançamentos divulgados na home.
  *
  * Não saem do banco, e não é esquecimento: nenhum deles existe na
- * carteira importada. São lançamentos que a Boost divulga em subdomínio
- * separado, cada um com o próprio site. O cartão aqui é a porta de
- * entrada para aquele site, não para uma listagem de unidades, então
+ * carteira importada. São lançamentos que a Boost divulga à parte, e
  * amarrá-los à tabela de condomínios criaria dez registros vazios só
  * para segurar um nome e uma foto.
+ *
+ * Todos os cartões levam ao contato, e não ao site de cada lançamento.
+ * A decisão é de quem vende: em lançamento a conversa começa com o
+ * consultor, e mandar a pessoa para fora do site no meio da visita
+ * entrega a intenção para outro lugar. O endereço de cada um fica
+ * guardado abaixo, em `site`, para o dia em que a decisão mudar.
  *
  * Para trocar a arte de um deles, basta substituir o arquivo em
  * assets/site/empreendimentos/ mantendo o mesmo nome. O `npm run assets`
@@ -21,44 +25,50 @@ export interface Empreendimento {
   nome: string;
   /** Nome do arquivo em assets/site/empreendimentos, sem a extensão. */
   arquivo: string;
-  /** Site próprio do empreendimento. */
-  link: string;
+  /**
+   * Site próprio do lançamento. Registro, não destino: hoje o cartão
+   * aponta para DESTINO_EMPREENDIMENTO.
+   */
+  site: string;
 }
 
+/** Para onde todo cartão de lançamento leva. */
+export const DESTINO_EMPREENDIMENTO = '/contato';
+
 export const EMPREENDIMENTOS: Empreendimento[] = [
-  { nome: 'Terruá', arquivo: 'terrua', link: 'https://terrua.boostimoveis.com.br/' },
+  { nome: 'Terruá', arquivo: 'terrua', site: 'https://terrua.boostimoveis.com.br/' },
   {
     nome: 'World Trade Center',
     arquivo: 'world-trade-center',
-    link: 'https://wtc.boostimoveis.com.br/',
+    site: 'https://wtc.boostimoveis.com.br/',
   },
-  { nome: 'Hamoa', arquivo: 'hamoa', link: 'https://hamoa.boostimoveis.com.br/' },
-  { nome: "Casa'Alta", arquivo: 'casa-alta', link: 'https://casaalta.boostimoveis.com.br/' },
+  { nome: 'Hamoa', arquivo: 'hamoa', site: 'https://hamoa.boostimoveis.com.br/' },
+  { nome: "Casa'Alta", arquivo: 'casa-alta', site: 'https://casaalta.boostimoveis.com.br/' },
   {
     nome: 'Harmon Lídice',
     arquivo: 'harmon-lidice',
-    link: 'https://harmonlidice.boostimoveis.com.br/',
+    site: 'https://harmonlidice.boostimoveis.com.br/',
   },
   {
     nome: 'Tramonto, Parque Una',
     arquivo: 'tramonto-parque-una',
-    link: 'https://tramonto.boostimoveis.com.br/',
+    site: 'https://tramonto.boostimoveis.com.br/',
   },
   {
     nome: 'Reserva do Parque',
     arquivo: 'reserva-do-parque',
-    link: 'https://reserva.boostimoveis.com.br/',
+    site: 'https://reserva.boostimoveis.com.br/',
   },
-  { nome: 'Catuçaba', arquivo: 'catucaba', link: 'https://catucaba.boostimoveis.com.br/' },
+  { nome: 'Catuçaba', arquivo: 'catucaba', site: 'https://catucaba.boostimoveis.com.br/' },
   {
     nome: 'Park dos Cedros',
     arquivo: 'park-dos-cedros',
-    link: 'https://parkdoscedros.boostimoveis.com.br/',
+    site: 'https://parkdoscedros.boostimoveis.com.br/',
   },
   {
     nome: 'Buritis Club Village',
     arquivo: 'buritis-club-village',
-    link: 'https://buritisclubvillage.boostimoveis.com.br/',
+    site: 'https://buritisclubvillage.boostimoveis.com.br/',
   },
 ];
 
