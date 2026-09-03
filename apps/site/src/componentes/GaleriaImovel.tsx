@@ -40,6 +40,15 @@ export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
   // createPortal so roda no navegador. Sem esta trava a geracao estatica
   // quebra ao procurar document no servidor.
   const [montado, setMontado] = useState(false);
+  /**
+   * Largura natural da foto aberta, medida quando ela carrega.
+   *
+   * As fotos desta carteira vieram do portal antigo em 550px de largura,
+   * algumas em 1280px. Deixar o CSS esticar uma delas para os 1400px do
+   * palco e o que fazia a imagem parecer quebrada: nao ha pixel para
+   * inventar. Com a medida em maos da para limitar o crescimento.
+   */
+  const [larguraNatural, setLarguraNatural] = useState<number | null>(null);
   const tiras = useRef<HTMLDivElement>(null);
 
   const total = fotos.length;
@@ -50,6 +59,7 @@ export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
     (passo: number) => {
       if (total === 0) return;
       setAtual((i) => (i + passo + total) % total);
+      setLarguraNatural(null);
     },
     [total],
   );
@@ -93,7 +103,13 @@ export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
   function abrir(indice: number) {
     if (total === 0) return;
     setAtual(indice);
+    setLarguraNatural(null);
     setVisor(true);
+  }
+
+  function irPara(indice: number) {
+    setAtual(indice);
+    setLarguraNatural(null);
   }
 
   const principal = fotos[0];
@@ -237,11 +253,27 @@ export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
                 key={fotos[atual].url}
                 src={fotos[atual].url}
                 alt={fotos[atual].legenda ?? `${imovel.titulo}, foto ${atual + 1}`}
-                width={2400}
-                height={1600}
+                width={1600}
+                height={1200}
                 quality={90}
                 className="visor-foto"
                 priority
+                onLoad={(e) => setLarguraNatural(e.currentTarget.naturalWidth || null)}
+                /**
+                 * O teto de crescimento vira variavel de CSS, e o estilo
+                 * cruza com o limite do palco por min(). Uma foto de
+                 * 550px para de esticar em 880 e continua nitida; uma de
+                 * 1280 vai ate onde o palco deixar.
+                 *
+                 * 1.6x e o ponto em que o borrado ainda nao aparece numa
+                 * tela comum. Sem teto nenhum, o palco de 1400px pegava
+                 * a foto de 550 e esticava duas vezes e meia.
+                 */
+                style={
+                  {
+                    '--teto': larguraNatural ? `${Math.round(larguraNatural * 1.6)}px` : '100%',
+                  } as React.CSSProperties
+                }
               />
 
               {total > 1 && (
@@ -263,7 +295,7 @@ export function GaleriaImovel({ imovel }: { imovel: ImovelPublico }) {
                     key={`${f.url}-${i}`}
                     className="visor-tira"
                     aria-current={i === atual}
-                    onClick={() => setAtual(i)}
+                    onClick={() => irPara(i)}
                     aria-label={`Ir para a foto ${i + 1}`}
                   >
                     <Image

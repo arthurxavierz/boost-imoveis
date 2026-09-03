@@ -244,6 +244,18 @@ export default async function PaginaInicial() {
             <BrilhoPonteiro>
               <VitrineDestaque lote={loteDestaque} />
             </BrilhoPonteiro>
+
+            {/* O atalho repete o link do cabeçalho da seção, e a repetição
+                é intencional: quem rolou os sete cartões está com a
+                intenção quente e a esta altura o link de cima saiu da
+                tela. Em ouro cheio porque é a ação principal da página
+                depois da busca. */}
+            <div className="acao-vitrine">
+              <Link className="btn btn-ouro btn-grande" href="/imoveis">
+                Ver todos os imóveis
+                <IconeSeta />
+              </Link>
+            </div>
           </div>
         </section>
       )}

@@ -3132,17 +3132,30 @@ main {
   position: relative;
   display: grid;
   place-items: center;
-  padding: clamp(14px, 2vh, 28px) clamp(16px, 6vw, 108px);
+  padding: clamp(12px, 2vh, 24px) clamp(16px, 5vw, 96px);
   min-height: 0;
+  /* Rede contra vazamento. A foto ja e limitada por max-height, mas
+     quando essa conta falhava a imagem escorria por baixo e aparecia
+     nos vaos entre as miniaturas, que foi exatamente o defeito
+     relatado. Com o corte aqui, nada passa para a faixa de baixo
+     aconteca o que acontecer. */
+  overflow: hidden;
 }
 
-/* width/height auto deixam a foto no tamanho real dela, e os dois
-   maximos a encaixam no palco preservando a proporcao. Foto em pe e
-   foto deitada se resolvem com a mesma regra. */
+/* width/height auto deixam a foto no tamanho real dela, e os maximos a
+   encaixam no palco preservando a proporcao. Foto em pe e foto deitada
+   se resolvem com a mesma regra.
+
+   O min() com --teto e o que impede o esticamento. As fotos desta
+   carteira tem 550px de largura na maioria, e o palco tem quase 1400:
+   sem o teto, o navegador espalhava 550 pixels por 1400 e o resultado
+   era a imagem borrada que motivou este ajuste. O componente mede a
+   foto ao carregar e escreve o teto; enquanto nao mediu, vale 100% e a
+   foto se comporta como antes. */
 .visor-foto {
   width: auto;
   height: auto;
-  max-width: 100%;
+  max-width: min(100%, var(--teto, 100%));
   max-height: 100%;
   object-fit: contain;
   border-radius: var(--raio-p);
@@ -4738,6 +4751,20 @@ main {
   .area-brilho [data-brilho]:hover::after {
     opacity: 1;
   }
+}
+
+/* Atalho no pé da vitrine de destaque. O respiro em cima é maior que o
+   normal de propósito: o botão precisa se ler como o fim da seção, e
+   não como um oitavo cartão que escorregou para fora do trilho. */
+.acao-vitrine {
+  display: flex;
+  justify-content: center;
+  margin-top: 44px;
+}
+
+.btn-grande {
+  padding: 17px 34px;
+  font-size: 1rem;
 }
 
 /* ---------- GRADE DE EMPREENDIMENTOS ----------
