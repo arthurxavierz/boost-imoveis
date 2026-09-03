@@ -148,7 +148,7 @@ export default async function PaginaInicial() {
       </div>
 
       {/* ---------- EMPREENDIMENTOS ---------- */}
-      <section className="secao" style={{ paddingBottom: 0 }}>
+      <section className="secao secao-empreendimentos" style={{ paddingBottom: 0 }}>
         <div className="container">
           <Revelar>
             <div className="cabecalho-secao">

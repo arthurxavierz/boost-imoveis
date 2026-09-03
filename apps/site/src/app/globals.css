@@ -4028,6 +4028,15 @@ main {
     display: flex;
   }
 
+  /* Na ficha do imóvel o WhatsApp flutuante vira ruído: a barra de baixo
+     já traz "Falar" com a mensagem do imóvel escrita, que é a versão útil
+     do mesmo botão. E o flutuante ainda cobria o preço, justamente a
+     informação que a barra existe para mostrar. Fora da ficha ele
+     continua, porque ali é o único caminho para a conversa. */
+  body:has(.com-barra-movel) .zap-flutuante {
+    display: none;
+  }
+
   /* Com a barra fixa embaixo, o rodapé precisa de folga para não ficar
      escondido atrás dela na última rolagem. */
   .com-barra-movel {
@@ -4088,6 +4097,23 @@ main {
 
   .hero .titulo-1 {
     max-width: 14ch;
+  }
+
+  /* O rótulo abria quase encostado na barra do topo. O respiro vem do
+     padding do hero, e não de uma margem no rótulo: o conteúdo é
+     centralizado no eixo vertical, então uma margem no primeiro item
+     seria dividida pela centralização e desceria metade do pedido. */
+  .hero {
+    padding-top: calc(var(--cabecalho) + 26px);
+  }
+
+  .hero-conteudo .rotulo {
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+  }
+
+  .hero-conteudo .rotulo::before {
+    width: 20px;
   }
 
   .hero-texto {
@@ -4789,18 +4815,27 @@ main {
    Escondida abaixo de 1200px, e não empilhada. Foi pedido assim, e o
    motivo se sustenta: no celular esta grade fica entre o hero e a
    vitrine, e dez blocos de imagem empurrariam o primeiro imóvel para
-   depois do terceiro rolar. A marcação continua no HTML, então os dez
-   links seguem valendo para o Google. */
-.grade-empreendimentos {
+   depois do terceiro rolar.
+
+   Quem some no celular é a seção inteira, e não só a grade. Escondendo
+   apenas os cartões, sobravam o rótulo "LANÇAMENTOS" e o título
+   "Empreendimentos exclusivos" anunciando um vazio, que é pior do que
+   não ter a seção. A marcação continua no HTML e os dez links seguem
+   valendo para o Google, que não aplica a consulta de largura. */
+.secao-empreendimentos {
   display: none;
 }
 
 @media (min-width: 1200px) {
-  .grade-empreendimentos {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 14px;
+  .secao-empreendimentos {
+    display: block;
   }
+}
+
+.grade-empreendimentos {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .empreendimento {
