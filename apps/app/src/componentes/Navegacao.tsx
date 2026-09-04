@@ -118,6 +118,16 @@ export function Navegacao({ usuario }: { usuario: Perfil }) {
   // A barra do celular comporta cinco alvos sem apertar demais.
   const itensCelular = itens.slice(0, 5);
 
+  /**
+   * Rede de seguranca para a volta do navegador e para links de fora da
+   * lateral. Fechar so por aqui nao bastava: usePathname() so muda quando
+   * a navegacao termina de valer, e toda pagina do painel e force-dynamic
+   * — entao entre o toque e a troca de rota cabia a consulta inteira ao
+   * banco, com o fundo escuro por cima segurando os cliques. Tocar na aba
+   * em que ja se esta era pior ainda: o caminho nao mudava nunca, e a
+   * lateral ficava aberta ate alguem achar o X. Quem fecha de verdade e o
+   * onClick de cada link, no toque.
+   */
   useEffect(() => {
     setAberta(false);
   }, [caminho]);
@@ -177,6 +187,7 @@ export function Navegacao({ usuario }: { usuario: Perfil }) {
                   key={href}
                   href={href}
                   className="lateral-item"
+                  onClick={() => setAberta(false)}
                   aria-current={estaAtivo(href, caminho) ? 'page' : undefined}
                 >
                   <Icone />
@@ -188,7 +199,7 @@ export function Navegacao({ usuario }: { usuario: Perfil }) {
         })}
 
         <div className="lateral-rodape">
-          <Link href="/perfil" className="cartao-usuario">
+          <Link href="/perfil" className="cartao-usuario" onClick={() => setAberta(false)}>
             <span className="avatar">{iniciais(usuario.nome)}</span>
             <span style={{ minWidth: 0, flex: 1 }}>
               <strong>{usuario.nome}</strong>
@@ -222,6 +233,7 @@ export function Navegacao({ usuario }: { usuario: Perfil }) {
               key={href}
               href={href}
               className="item-inferior"
+              onClick={() => setAberta(false)}
               aria-current={estaAtivo(href, caminho) ? 'page' : undefined}
             >
               <Icone />
