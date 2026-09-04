@@ -3098,11 +3098,25 @@ button {
     transform: translateX(-100%);
     transition: transform 0.3s var(--curva);
     width: 272px;
+    /* Acima do proprio fundo. Com a lateral em 60 e o fundo-escuro em
+       100, o vidro fosco caia por cima do menu: ele aparecia borrado e,
+       pior, comia todos os toques — nem os itens nem o X recebiam
+       clique, porque quem estava na frente era o fundo. */
+    z-index: 96;
   }
 
   .lateral.aberta {
     transform: none;
     box-shadow: var(--sombra-4);
+  }
+
+  /* O fundo do menu tem camada propria, logo abaixo da lateral.
+     O .fundo-escuro padrao (100) e da gaveta, que fica em 101 e por
+     isso funciona la; aqui ele precisa passar por baixo. Em 95 ainda
+     cobre topo, barra inferior, botao flutuante e faixa de demo, que e
+     o que um fundo de menu tem de escurecer. */
+  .fundo-escuro.fundo-menu {
+    z-index: 95;
   }
 
   .conteudo {
