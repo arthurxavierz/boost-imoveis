@@ -45,6 +45,21 @@ import {
 } from '@/app/(painel)/imoveis/acoes';
 import { GavetaImovel } from './GavetaImovel';
 
+/**
+ * Linhas desenhadas por vez.
+ *
+ * A carteira inteira continua em memoria de proposito: filtro, VGV,
+ * contagem e a selecao em lote precisam enxergar o conjunto todo, e e o
+ * que permite dizer "461 fora da vitrine" olhando para o real. Caro era
+ * desenhar tudo de uma vez — cada linha traz dois <select>, e um deles
+ * lista a equipe inteira, o que com novecentos imoveis passa de quinze
+ * mil <option> montadas e hidratadas a cada abertura da aba.
+ *
+ * Paginar aqui e so sobre o desenho. Marcar "todos" segue marcando a
+ * carteira filtrada inteira, e nao os cinquenta da tela.
+ */
+const POR_PAGINA = 50;
+
 const ESTILO_SELECT_CELULA: React.CSSProperties = {
   minHeight: 34,
   padding: '5px 28px 5px 10px',
@@ -110,6 +125,7 @@ export function ListaImoveis({
   const [criandoNovo, setCriandoNovo] = useState(false);
   const [recado, setRecado] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set());
+  const [pagina, setPagina] = useState(1);
 
   /**
    * A ficha completa do imóvel aberto.
@@ -143,6 +159,27 @@ export function ListaImoveis({
     () => filtrarCarteira(imoveis, filtros, proprietarios),
     [imoveis, filtros, proprietarios],
   );
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+
+  /**
+   * A pagina pedida, presa ao que existe. Excluir um lote encurta a
+   * lista debaixo de quem estava na ultima pagina; sem o teto, a tela
+   * ficaria vazia ate a pessoa entender que precisa voltar.
+   */
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const inicioFatia = (paginaAtual - 1) * POR_PAGINA;
+
+  const visiveis = useMemo(
+    () => filtrados.slice(inicioFatia, inicioFatia + POR_PAGINA),
+    [filtrados, inicioFatia],
+  );
+
+  // Filtro novo, leitura nova: seguir na pagina sete de uma busca que
+  // acabou de mudar mostra um pedaco do meio sem contexto.
+  useEffect(() => {
+    setPagina(1);
+  }, [filtros]);
 
   useEffect(() => {
     if (!abertoId) {
@@ -725,7 +762,7 @@ export function ListaImoveis({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtrados.map((imovel) => {
+                  {visiveis.map((imovel) => {
                     const editavel = podeGerenciarImovel(usuario, imovel);
                     const situacao = STATUS_IMOVEL[imovel.status];
                     const dono = imovel.proprietario_id
@@ -932,6 +969,34 @@ export function ListaImoveis({
                 Clique no título para abrir a ficha, editar ou excluir. Publicar ou retirar do ar
                 reflete no site em até 5 minutos, tempo do cache da vitrine.
               </span>
+
+              {totalPaginas > 1 && (
+                <div className="paginacao-carteira">
+                  <span className="texto-mudo">
+                    {inicioFatia + 1}–{inicioFatia + visiveis.length} de {filtrados.length}
+                  </span>
+
+                  <button
+                    className="btn btn-claro btn-pequeno"
+                    onClick={() => setPagina(paginaAtual - 1)}
+                    disabled={paginaAtual <= 1}
+                  >
+                    Anterior
+                  </button>
+
+                  <span className="texto-mudo">
+                    {paginaAtual} / {totalPaginas}
+                  </span>
+
+                  <button
+                    className="btn btn-claro btn-pequeno"
+                    onClick={() => setPagina(paginaAtual + 1)}
+                    disabled={paginaAtual >= totalPaginas}
+                  >
+                    Próxima
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
