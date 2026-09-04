@@ -220,7 +220,7 @@ export function Navegacao({ usuario }: { usuario: Perfil }) {
 
       {aberta && (
         <div
-          className="fundo-escuro somente-celular"
+          className="fundo-escuro fundo-menu somente-celular"
           onClick={() => setAberta(false)}
           aria-hidden="true"
         />
